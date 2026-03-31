@@ -10,6 +10,8 @@ interface SidebarProps {
   changedModuleIds: string[];
   searchValue: string;
   isEditingCopy: boolean;
+  className?: string;
+  sticky?: boolean;
 }
 
 export function Sidebar({
@@ -20,9 +22,18 @@ export function Sidebar({
   changedModuleIds,
   searchValue,
   isEditingCopy,
+  className,
+  sticky = true,
 }: SidebarProps) {
   return (
-    <aside className="sticky top-[168px] h-[calc(100vh-184px)] overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+    <aside
+      className={cn(
+        sticky
+          ? "sticky top-[168px] h-[calc(100vh-184px)] overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"
+          : "h-full overflow-y-auto rounded-[28px] border border-slate-200 bg-white shadow-sm",
+        className,
+      )}
+    >
       <div className="border-b border-slate-100 px-5 py-4">
         <h2 className="text-sm font-semibold text-slate-900">模块导航</h2>
         <p className="mt-1 text-xs leading-5 text-slate-500">

@@ -9,14 +9,14 @@ interface OverviewPanelProps {
 export function OverviewPanel({ document, currentModule }: OverviewPanelProps) {
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-slate-200 px-5 py-4">
+      <div className="border-b border-slate-200 px-6 py-4">
         <h3 className="text-sm font-semibold text-slate-900">模块说明</h3>
         <p className="mt-1 text-xs leading-5 text-slate-500">
           这里会用业务语言概括当前模块的作用、来源与阅读重点。
         </p>
       </div>
 
-      <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+      <div className="flex-1 space-y-4 overflow-y-auto px-6 py-4">
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
             <FileText className="h-4 w-4 text-slate-500" />

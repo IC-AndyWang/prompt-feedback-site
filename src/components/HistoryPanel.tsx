@@ -31,7 +31,7 @@ export function HistoryPanel({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-slate-200 px-5 py-4">
+      <div className="border-b border-slate-200 px-6 py-4">
         <h3 className="text-sm font-semibold text-slate-900">历史记录与留痕</h3>
         <p className="mt-1 text-xs leading-5 text-slate-500">
           {isAdmin
@@ -40,7 +40,7 @@ export function HistoryPanel({
         </p>
       </div>
 
-      <div className="flex-1 space-y-6 overflow-y-auto px-5 py-4">
+      <div className="flex-1 space-y-6 overflow-y-auto px-6 py-4">
         <section>
           <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
             <History className="h-4 w-4 text-slate-500" />

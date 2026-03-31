@@ -5,7 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { PanelRightClose, PanelRightOpen } from "lucide-react";
+import { PanelLeftOpen, PanelRightClose, PanelRightOpen, X } from "lucide-react";
 import { parseDocxToPromptDocument } from "./utils/docxParser";
 import { Header } from "./components/Header";
 import { LoginScreen } from "./components/LoginScreen";
@@ -78,6 +78,8 @@ function App() {
   >({});
   const [rightPanelWidth, setRightPanelWidth] = useState(420);
   const [isResizingPanel, setIsResizingPanel] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [mobileWorkbenchOpen, setMobileWorkbenchOpen] = useState(false);
   const moduleRefs = useRef<Record<string, HTMLElement | null>>({});
 
   useEffect(() => {
@@ -433,6 +435,7 @@ function App() {
 
   function handleSelectModule(moduleId: string) {
     setActiveModuleId(moduleId);
+    setMobileNavOpen(false);
     const node = moduleRefs.current[moduleId];
     if (node) {
       node.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -727,6 +730,7 @@ function App() {
   function handleOpenPanel(panel: "comments" | "diff", moduleId: string) {
     setActiveModuleId(moduleId);
     setSidePanelTab(panel);
+    setMobileWorkbenchOpen(true);
   }
 
   function handleExcerptSelect(moduleId: string) {
@@ -741,6 +745,7 @@ function App() {
     });
     setActiveModuleId(moduleId);
     setSidePanelTab("comments");
+    setMobileWorkbenchOpen(true);
   }
 
   const activeModuleBase = document?.modules.find((module) => module.id === activeModule?.id);
@@ -776,6 +781,61 @@ function App() {
         ? "当前模块评论会直接写入 Cloudflare 数据库。"
         : "当前模块评论已接入数据库。请先登录后再发布评论。"
       : "当前使用本地临时评论模式。";
+
+  const workbenchPanelContent = (
+    <>
+      {sidePanelTab === "overview" ? (
+        <OverviewPanel document={document} currentModule={activeModule} />
+      ) : null}
+      {sidePanelTab === "comments" ? (
+        <CommentsPanel
+          comments={moduleComments}
+          modules={document?.modules ?? []}
+          currentModule={activeModule}
+          currentUser={commentsActor}
+          onlyOpen={onlyOpenComments}
+          isLoading={Boolean(activeModule && commentsLoadingByModule[activeModule.id])}
+          errorMessage={activeModule ? commentsErrorByModule[activeModule.id] : undefined}
+          composerDisabled={composerDisabled}
+          composerHint={composerHint}
+          selectedExcerpt={selectedExcerpt}
+          onClearExcerpt={() => setSelectedExcerpt(undefined)}
+          onToggleOnlyOpen={() => setOnlyOpenComments((previous) => !previous)}
+          onAddComment={handleAddComment}
+          onToggleStatus={handleToggleCommentStatus}
+        />
+      ) : null}
+      {sidePanelTab === "history" ? (
+        <HistoryPanel
+          copies={collaboration.copies}
+          changeRecords={collaboration.changeRecords}
+          currentUser={currentUser}
+          isAdmin={isAdmin}
+          activeCopyId={activeCopyId}
+          onSelectCopy={(copyId) => {
+            setViewMode("readable");
+            setActiveCopyId(copyId);
+            setSidePanelTab("diff");
+            setMobileWorkbenchOpen(true);
+          }}
+          onInspectModule={(moduleId) => {
+            setActiveModuleId(moduleId);
+            setSidePanelTab("diff");
+            handleSelectModule(moduleId);
+            setMobileWorkbenchOpen(true);
+          }}
+        />
+      ) : null}
+      {sidePanelTab === "diff" ? (
+        <DiffPanel
+          currentModule={activeModule}
+          originalText={activeModuleBase?.readableContent}
+          changedText={activeModuleOverride}
+          copyName={activeCopy?.name}
+        />
+      ) : null}
+    </>
+  );
 
   if (isLoading) {
     return (
@@ -897,9 +957,29 @@ function App() {
           changedModuleIds={changedModuleIds}
           searchValue={searchValue}
           isEditingCopy={isEditingCopyMode}
+          className="hidden xl:block"
         />
 
         <section className="min-w-0 space-y-5">
+          <div className="flex items-center gap-3 xl:hidden">
+            <button
+              type="button"
+              onClick={() => setMobileNavOpen(true)}
+              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50"
+            >
+              <PanelLeftOpen className="h-4 w-4" />
+              模块导航
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileWorkbenchOpen(true)}
+              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50"
+            >
+              <PanelRightOpen className="h-4 w-4" />
+              右侧工作台
+            </button>
+          </div>
+
           <div className="rounded-[28px] border border-slate-200 bg-white px-6 py-5 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -1061,8 +1141,8 @@ function App() {
             className="fixed right-6 top-[148px] flex h-[calc(100vh-164px)] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"
             style={{ width: rightPanelWidth }}
           >
-            <div className="sticky top-0 z-10 border-b border-slate-200 bg-white px-3 py-2">
-              <div className="mb-2 px-1 text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
+            <div className="sticky top-0 z-10 border-b border-slate-200 bg-white px-5 py-3">
+              <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
                 右侧工作台
               </div>
               <div className="flex flex-wrap gap-2">
@@ -1089,57 +1169,87 @@ function App() {
               </div>
             </div>
 
-            {sidePanelTab === "overview" ? (
-              <OverviewPanel document={document} currentModule={activeModule} />
-            ) : null}
-            {sidePanelTab === "comments" ? (
-              <CommentsPanel
-                comments={moduleComments}
-                modules={document.modules}
-                currentModule={activeModule}
-                currentUser={commentsActor}
-                onlyOpen={onlyOpenComments}
-                isLoading={Boolean(activeModule && commentsLoadingByModule[activeModule.id])}
-                errorMessage={activeModule ? commentsErrorByModule[activeModule.id] : undefined}
-                composerDisabled={composerDisabled}
-                composerHint={composerHint}
-                selectedExcerpt={selectedExcerpt}
-                onClearExcerpt={() => setSelectedExcerpt(undefined)}
-                onToggleOnlyOpen={() => setOnlyOpenComments((previous) => !previous)}
-                onAddComment={handleAddComment}
-                onToggleStatus={handleToggleCommentStatus}
-              />
-            ) : null}
-            {sidePanelTab === "history" ? (
-              <HistoryPanel
-                copies={collaboration.copies}
-                changeRecords={collaboration.changeRecords}
-                currentUser={currentUser}
-                isAdmin={isAdmin}
-                activeCopyId={activeCopyId}
-                onSelectCopy={(copyId) => {
-                  setViewMode("readable");
-                  setActiveCopyId(copyId);
-                  setSidePanelTab("diff");
-                }}
-                onInspectModule={(moduleId) => {
-                  setActiveModuleId(moduleId);
-                  setSidePanelTab("diff");
-                  handleSelectModule(moduleId);
-                }}
-              />
-            ) : null}
-            {sidePanelTab === "diff" ? (
-              <DiffPanel
-                currentModule={activeModule}
-                originalText={activeModuleBase?.readableContent}
-                changedText={activeModuleOverride}
-                copyName={activeCopy?.name}
-              />
-            ) : null}
+            {workbenchPanelContent}
           </aside>
         </div>
       </main>
+
+      {mobileNavOpen ? (
+        <div className="fixed inset-0 z-40 bg-slate-950/35 xl:hidden">
+          <div className="h-full w-[min(24rem,calc(100vw-1rem))] bg-white p-3 shadow-2xl">
+            <div className="mb-3 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+              <div>
+                <div className="text-sm font-semibold text-slate-900">模块导航</div>
+                <div className="mt-1 text-xs text-slate-500">小屏模式下可折叠查看</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMobileNavOpen(false)}
+                className="rounded-full border border-slate-200 p-2 text-slate-500 transition hover:bg-slate-50"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <Sidebar
+              modules={modulesWithSearch}
+              activeModuleId={activeModule?.id}
+              onSelectModule={handleSelectModule}
+              commentCountByModule={commentCountByModule}
+              changedModuleIds={changedModuleIds}
+              searchValue={searchValue}
+              isEditingCopy={isEditingCopyMode}
+              sticky={false}
+              className="h-[calc(100vh-108px)] rounded-[24px]"
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {mobileWorkbenchOpen ? (
+        <div className="fixed inset-0 z-40 bg-slate-950/35 xl:hidden">
+          <div className="ml-auto h-full w-[min(28rem,calc(100vw-1rem))] bg-white shadow-2xl">
+            <div className="sticky top-0 z-10 border-b border-slate-200 bg-white px-5 py-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
+                    右侧工作台
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMobileWorkbenchOpen(false)}
+                  className="rounded-full border border-slate-200 p-2 text-slate-500 transition hover:bg-slate-50"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  ["overview", "模块说明"],
+                  ["comments", "评论"],
+                  ["history", "历史记录"],
+                  ["diff", "diff 对照"],
+                ].map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setSidePanelTab(key as SidePanelTab)}
+                    className={[
+                      "rounded-full px-3 py-2 text-xs font-medium transition hover:-translate-y-0.5 hover:shadow-sm",
+                      sidePanelTab === key
+                        ? "bg-slate-900 text-white"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+                    ].join(" ")}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="h-[calc(100vh-93px)] overflow-hidden">{workbenchPanelContent}</div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
