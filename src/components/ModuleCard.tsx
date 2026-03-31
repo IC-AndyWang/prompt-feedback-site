@@ -22,7 +22,7 @@ interface ModuleCardProps {
   isChanged: boolean;
   editedContent?: string;
   onEditedContentChange: (moduleId: string, value: string) => void;
-  onEditedContentCommit: (moduleId: string) => void;
+  onEditedContentCommit: (moduleId: string) => void | Promise<void>;
   onOpenPanel: (panel: "comments" | "diff", moduleId: string) => void;
   onSwitchToCompare: (moduleId: string) => void;
   onJumpToModule: (moduleId: string) => void;

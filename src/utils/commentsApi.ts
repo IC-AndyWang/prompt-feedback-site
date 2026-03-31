@@ -93,6 +93,7 @@ export async function fetchModuleComments(moduleKey: string, localModuleId: stri
 export async function createModuleComment(input: {
   moduleKey: string;
   localModuleId: string;
+  moduleTitle?: string;
   content: string;
   excerpt?: string;
 }) {
@@ -102,6 +103,7 @@ export async function createModuleComment(input: {
       method: "POST",
       body: JSON.stringify({
         moduleKey: input.moduleKey,
+        moduleTitle: input.moduleTitle,
         content: encodeContent(input.content, input.excerpt),
       }),
     },

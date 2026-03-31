@@ -37,6 +37,11 @@ import {
   loadCollaborationStore,
   saveCollaborationStore,
 } from "./utils/storage";
+import {
+  createPromptCopy,
+  fetchWorkbenchState,
+  savePromptModuleChange,
+} from "./utils/workbenchApi";
 
 const DEFAULT_DOC_URL = "/sample/msl_prompt.docx";
 const DEFAULT_DOC_PATH = "/Users/andywang/Downloads/AI MSL/msl_prompt.docx";
@@ -59,6 +64,8 @@ function App() {
   const [selectedExcerpt, setSelectedExcerpt] = useState<ExcerptSelection>();
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [workbenchApiAvailable, setWorkbenchApiAvailable] = useState<boolean | null>(null);
+  const [workbenchError, setWorkbenchError] = useState<string>();
   const [commentsApiAvailable, setCommentsApiAvailable] = useState<boolean | null>(null);
   const [remoteCommentsByModule, setRemoteCommentsByModule] = useState<
     Record<string, CommentItem[]>
@@ -131,15 +138,59 @@ function App() {
       setSelectedExcerpt(undefined);
       setSidePanelTab("overview");
       setIsCollaborationReady(false);
+      setWorkbenchApiAvailable(null);
+      setWorkbenchError(undefined);
       return;
     }
 
-    setCollaboration(loadCollaborationStore(authUser.id));
-    setActiveCopyId(undefined);
-    setDraftEdits({});
-    setSelectedExcerpt(undefined);
-    setSidePanelTab("overview");
-    setIsCollaborationReady(true);
+    const userId = authUser.id;
+    let cancelled = false;
+
+    async function loadWorkbenchState() {
+      const localStore = loadCollaborationStore(userId);
+
+      try {
+        const remoteState = await fetchWorkbenchState();
+        if (cancelled) {
+          return;
+        }
+
+        setCollaboration({
+          comments: localStore.comments,
+          copies: remoteState.copies,
+          changeRecords: remoteState.changeRecords,
+        });
+        setWorkbenchApiAvailable(true);
+        setWorkbenchError(undefined);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        setCollaboration(localStore);
+        setWorkbenchApiAvailable(false);
+        setWorkbenchError(
+          error instanceof Error
+            ? `当前副本与历史记录暂未连接数据库，已回退到本地模式。${error.message}`
+            : "当前副本与历史记录暂未连接数据库，已回退到本地模式。",
+        );
+      } finally {
+        if (cancelled) {
+          return;
+        }
+        setActiveCopyId(undefined);
+        setDraftEdits({});
+        setSelectedExcerpt(undefined);
+        setSidePanelTab("overview");
+        setIsCollaborationReady(true);
+      }
+    }
+
+    void loadWorkbenchState();
+
+    return () => {
+      cancelled = true;
+    };
   }, [authUser?.id, isAuthLoading]);
 
   useEffect(() => {
@@ -426,6 +477,7 @@ function App() {
         const created = await createModuleComment({
           moduleKey: activeModule.tagName,
           localModuleId: activeModule.id,
+          moduleTitle: activeModule.title,
           content: payload.content,
           excerpt: payload.excerpt,
         });
@@ -519,7 +571,7 @@ function App() {
     }));
   }
 
-  function handleCreateCopy() {
+  async function handleCreateCopy() {
     if (!document) {
       return;
     }
@@ -548,6 +600,37 @@ function App() {
       changeRecordIds: [],
     };
 
+    if (workbenchApiAvailable !== false) {
+      try {
+        const remoteCopy = await createPromptCopy({
+          baseDocumentId: document.id,
+          ownerName: currentUser.name,
+          name: copy.name,
+        });
+
+        setCollaboration((previous) => ({
+          ...previous,
+          copies: [
+            remoteCopy,
+            ...previous.copies.filter((item) => item.id !== remoteCopy.id),
+          ],
+        }));
+        setWorkbenchApiAvailable(true);
+        setWorkbenchError(undefined);
+        setActiveCopyId(remoteCopy.id);
+        setDraftEdits(remoteCopy.moduleOverrides);
+        setSidePanelTab("history");
+        return;
+      } catch (error) {
+        setWorkbenchApiAvailable(false);
+        setWorkbenchError(
+          error instanceof Error
+            ? `创建副本写入数据库失败，已回退到本地模式。${error.message}`
+            : "创建副本写入数据库失败，已回退到本地模式。",
+        );
+      }
+    }
+
     setCollaboration((previous) => ({
       ...previous,
       copies: [copy, ...previous.copies],
@@ -568,7 +651,7 @@ function App() {
     }));
   }
 
-  function handleEditedContentCommit(moduleId: string) {
+  async function handleEditedContentCommit(moduleId: string) {
     if (!document || !activeCopy) {
       return;
     }
@@ -610,6 +693,39 @@ function App() {
           ? `将“${baseModule.title}”恢复为主版本内容`
           : `更新了“${baseModule.title}”模块的内容表述`,
     };
+
+    if (workbenchApiAvailable !== false) {
+      try {
+        const saved = await savePromptModuleChange({
+          copyId: activeCopy.id,
+          moduleId,
+          moduleTitle: baseModule.title,
+          baseText: baseModule.readableContent,
+          nextText: nextValue,
+          authorName: currentUser.name,
+        });
+
+        setCollaboration((previous) => ({
+          ...previous,
+          copies: previous.copies.map((copy) =>
+            copy.id === activeCopy.id ? saved.copy : copy,
+          ),
+          changeRecords: saved.changeRecord
+            ? [saved.changeRecord, ...previous.changeRecords]
+            : previous.changeRecords,
+        }));
+        setWorkbenchApiAvailable(true);
+        setWorkbenchError(undefined);
+        return;
+      } catch (error) {
+        setWorkbenchApiAvailable(false);
+        setWorkbenchError(
+          error instanceof Error
+            ? `修改记录写入数据库失败，已回退到本地模式。${error.message}`
+            : "修改记录写入数据库失败，已回退到本地模式。",
+        );
+      }
+    }
 
     setCollaboration((previous) => ({
       ...previous,
@@ -763,6 +879,8 @@ function App() {
           setAuthUser(null);
           setCollaboration(createEmptyCollaborationStore());
           setIsCollaborationReady(false);
+          setWorkbenchApiAvailable(null);
+          setWorkbenchError(undefined);
           setActiveCopyId(undefined);
           setDraftEdits({});
           setSelectedExcerpt(undefined);
@@ -814,8 +932,25 @@ function App() {
                 <span className="rounded-full bg-slate-100 px-3 py-1">
                   角色：{isAdmin ? "管理视图" : "普通用户"}
                 </span>
+                <span
+                  className={[
+                    "rounded-full px-3 py-1",
+                    workbenchApiAvailable
+                      ? "bg-emerald-50 text-emerald-800"
+                      : "bg-amber-50 text-amber-800",
+                  ].join(" ")}
+                >
+                  {workbenchApiAvailable
+                    ? "副本与历史：数据库已连接"
+                    : "副本与历史：本地临时模式"}
+                </span>
               </div>
             </div>
+            {workbenchError ? (
+              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+                {workbenchError}
+              </div>
+            ) : null}
           </div>
 
           {activeCopy ? (

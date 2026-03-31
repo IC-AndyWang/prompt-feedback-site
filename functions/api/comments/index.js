@@ -6,6 +6,83 @@ function normalizeCommentStatus(status) {
   return "open";
 }
 
+async function ensureModuleRecord(env, input) {
+  const moduleId = input.moduleId ? String(input.moduleId).trim() : "";
+  const moduleKey = input.moduleKey ? String(input.moduleKey).trim() : "";
+  const moduleTitle = input.moduleTitle ? String(input.moduleTitle).trim() : moduleKey;
+
+  if (moduleId) {
+    const byId = await env.DB
+      .prepare(`SELECT id, module_key FROM modules WHERE id = ? LIMIT 1`)
+      .bind(moduleId)
+      .first();
+
+    if (byId) {
+      return byId;
+    }
+  }
+
+  if (moduleKey) {
+    const byKey = await env.DB
+      .prepare(`SELECT id, module_key FROM modules WHERE module_key = ? LIMIT 1`)
+      .bind(moduleKey)
+      .first();
+
+    if (byKey) {
+      return byKey;
+    }
+  }
+
+  if (!moduleKey) {
+    return null;
+  }
+
+  const version = await env.DB
+    .prepare(`
+      SELECT id
+      FROM prompt_versions
+      ORDER BY is_published DESC, created_at DESC
+      LIMIT 1
+    `)
+    .first();
+
+  if (!version) {
+    return null;
+  }
+
+  const nextModule = {
+    id: randomId(),
+    module_key: moduleKey,
+  };
+
+  try {
+    await env.DB
+      .prepare(`
+        INSERT INTO modules (
+          id, version_id, module_key, title, content, sort_order, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `)
+      .bind(
+        nextModule.id,
+        version.id,
+        moduleKey,
+        moduleTitle || moduleKey,
+        "",
+        9999,
+      )
+      .run();
+
+    return nextModule;
+  } catch {
+    const retried = await env.DB
+      .prepare(`SELECT id, module_key FROM modules WHERE module_key = ? LIMIT 1`)
+      .bind(moduleKey)
+      .first();
+
+    return retried || null;
+  }
+}
+
 export async function onRequestGet(context) {
   const { request, env } = context;
   const url = new URL(request.url);
@@ -84,6 +161,7 @@ export async function onRequestPost(context) {
 
   const moduleId = body.moduleId ? String(body.moduleId).trim() : "";
   const moduleKey = body.moduleKey ? String(body.moduleKey).trim() : "";
+  const moduleTitle = body.moduleTitle ? String(body.moduleTitle).trim() : "";
   const content = String(body.content || "").trim();
   const parentId = body.parentId ? String(body.parentId).trim() : null;
 
@@ -93,18 +171,14 @@ export async function onRequestPost(context) {
   if (!content) return badRequest("content is required");
   if (content.length > 5000) return badRequest("Comment is too long");
 
-  const moduleRecord = moduleId
-    ? await env.DB
-        .prepare(`SELECT id, module_key FROM modules WHERE id = ? LIMIT 1`)
-        .bind(moduleId)
-        .first()
-    : await env.DB
-        .prepare(`SELECT id, module_key FROM modules WHERE module_key = ? LIMIT 1`)
-        .bind(moduleKey)
-        .first();
+  const moduleRecord = await ensureModuleRecord(env, {
+    moduleId,
+    moduleKey,
+    moduleTitle,
+  });
 
   if (!moduleRecord) {
-    return badRequest("Module not found");
+    return badRequest("Module not found and could not be registered");
   }
 
   const id = randomId();
