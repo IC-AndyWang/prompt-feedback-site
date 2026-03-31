@@ -1,11 +1,4 @@
-import type { CommentItem, UserRole } from "../types";
-
-interface ApiUser {
-  id: string;
-  name: string;
-  email?: string;
-  role?: UserRole | string;
-}
+import type { CommentItem } from "../types";
 
 interface ApiCommentRow {
   id: string;
@@ -83,14 +76,6 @@ async function requestJson<T>(input: RequestInfo, init?: RequestInit): Promise<T
   }
 
   return data;
-}
-
-export async function fetchAuthUser() {
-  const data = await requestJson<{ user: ApiUser | null }>("/api/auth/me", {
-    method: "GET",
-    headers: {},
-  });
-  return data.user;
 }
 
 export async function fetchModuleComments(moduleKey: string, localModuleId: string) {

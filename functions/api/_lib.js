@@ -42,23 +42,38 @@ export function getCookie(request, name) {
   return null;
 }
 
-export function makeSessionCookie(token, maxAgeSeconds = 60 * 60 * 24 * 30) {
+export function getSessionMaxAgeSeconds(env) {
+  const rawDays = Number(env?.SESSION_MAX_AGE_DAYS || 30);
+  const safeDays = Number.isFinite(rawDays) && rawDays > 0 ? rawDays : 30;
+  return Math.floor(safeDays * 24 * 60 * 60);
+}
+
+export function shouldUseSecureCookie(request) {
+  try {
+    const url = new URL(request.url);
+    return url.protocol === "https:";
+  } catch {
+    return true;
+  }
+}
+
+export function makeSessionCookie(token, maxAgeSeconds = 60 * 60 * 24 * 30, secure = true) {
   return [
     `session=${encodeURIComponent(token)}`,
     "Path=/",
     "HttpOnly",
-    "Secure",
+    ...(secure ? ["Secure"] : []),
     "SameSite=Lax",
     `Max-Age=${maxAgeSeconds}`
   ].join("; ");
 }
 
-export function clearSessionCookie() {
+export function clearSessionCookie(secure = true) {
   return [
     "session=",
     "Path=/",
     "HttpOnly",
-    "Secure",
+    ...(secure ? ["Secure"] : []),
     "SameSite=Lax",
     "Max-Age=0"
   ].join("; ");

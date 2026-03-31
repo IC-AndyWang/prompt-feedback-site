@@ -1,6 +1,6 @@
-import { FileUp, GitBranchPlus, Search, Users } from "lucide-react";
+import { FileUp, GitBranchPlus, LogOut, Search, UserCircle2 } from "lucide-react";
 import type { ChangeEvent } from "react";
-import type { User, ViewMode } from "../types";
+import type { ViewMode } from "../types";
 import { cn } from "../utils/helpers";
 
 interface HeaderProps {
@@ -8,9 +8,9 @@ interface HeaderProps {
   onViewModeChange: (mode: ViewMode) => void;
   searchValue: string;
   onSearchChange: (value: string) => void;
-  users: User[];
-  currentUserId: string;
-  onUserChange: (userId: string) => void;
+  currentUserLabel: string;
+  currentUserRoleLabel: string;
+  onLogout: () => void;
   onCreateCopy: () => void;
   onReturnToBase: () => void;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
@@ -29,9 +29,9 @@ export function Header({
   onViewModeChange,
   searchValue,
   onSearchChange,
-  users,
-  currentUserId,
-  onUserChange,
+  currentUserLabel,
+  currentUserRoleLabel,
+  onLogout,
   onCreateCopy,
   onReturnToBase,
   onFileChange,
@@ -126,19 +126,20 @@ export function Header({
           </label>
 
           <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700">
-            <Users className="h-4 w-4 text-slate-400" />
-            <select
-              value={currentUserId}
-              onChange={(event) => onUserChange(event.target.value)}
-              className="bg-transparent outline-none"
-            >
-              {users.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.name} {user.role === "admin" ? "（管理视图）" : ""}
-                </option>
-              ))}
-            </select>
+            <UserCircle2 className="h-4 w-4 text-slate-400" />
+            <span>{currentUserLabel}</span>
+            <span className="text-slate-400">|</span>
+            <span>{currentUserRoleLabel}</span>
           </div>
+
+          <button
+            type="button"
+            onClick={onLogout}
+            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+          >
+            <LogOut className="h-4 w-4" />
+            退出登录
+          </button>
         </div>
       </div>
     </header>

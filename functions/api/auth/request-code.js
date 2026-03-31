@@ -25,6 +25,20 @@ export async function onRequestPost(context) {
     return badRequest("Valid email is required");
   }
 
+  const user = await env.DB
+    .prepare(`
+      SELECT id, is_active
+      FROM users
+      WHERE email = ?
+      LIMIT 1
+    `)
+    .bind(email)
+    .first();
+
+  if (!user || user.is_active !== 1) {
+    return json({ error: "This email is not allowed to log in." }, { status: 403 });
+  }
+
   const recent = await env.DB
     .prepare(`
       SELECT id

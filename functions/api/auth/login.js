@@ -21,34 +21,11 @@ export async function onRequestPost(context) {
   }
 
   const email = normalizeEmail(body.email);
-  const code = String(body.code || "").trim();
-
-  if (!email || !code) {
-    return badRequest("Email and code are required");
+  if (!email || !email.includes("@")) {
+    return badRequest("Valid email is required");
   }
 
-  const codeHash = await sha256Hex(code);
-
-  const authCode = await env.DB
-    .prepare(`
-      SELECT id, invite_code_id
-      FROM auth_codes
-      WHERE email = ?
-        AND code_hash = ?
-        AND type = 'otp'
-        AND used_at IS NULL
-        AND expires_at > CURRENT_TIMESTAMP
-      ORDER BY created_at DESC
-      LIMIT 1
-    `)
-    .bind(email, codeHash)
-    .first();
-
-  if (!authCode) {
-    return badRequest("Invalid or expired code");
-  }
-
-  let user = await env.DB
+  const user = await env.DB
     .prepare(`
       SELECT id, email, name, role, is_active
       FROM users
@@ -70,26 +47,6 @@ export async function onRequestPost(context) {
     `)
     .bind(user.id)
     .run();
-
-  await env.DB
-    .prepare(`
-      UPDATE auth_codes
-      SET used_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `)
-    .bind(authCode.id)
-    .run();
-
-  if (authCode.invite_code_id) {
-    await env.DB
-      .prepare(`
-        UPDATE invite_codes
-        SET used_count = used_count + 1
-        WHERE id = ?
-      `)
-      .bind(authCode.invite_code_id)
-      .run();
-  }
 
   const sessionToken = `${randomId()}-${randomCode(8)}`;
   const sessionTokenHash = await sha256Hex(sessionToken);
@@ -115,7 +72,12 @@ export async function onRequestPost(context) {
   return json(
     {
       ok: true,
-      user
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role
+      }
     },
     {
       headers: {

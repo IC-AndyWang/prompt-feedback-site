@@ -1,4 +1,10 @@
-import { clearSessionCookie, getCookie, json, sha256Hex } from "../_lib.js";
+import {
+  clearSessionCookie,
+  getCookie,
+  json,
+  sha256Hex,
+  shouldUseSecureCookie
+} from "../_lib.js";
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -16,7 +22,7 @@ export async function onRequestPost(context) {
     { ok: true },
     {
       headers: {
-        "Set-Cookie": clearSessionCookie()
+        "Set-Cookie": clearSessionCookie(shouldUseSecureCookie(request))
       }
     }
   );

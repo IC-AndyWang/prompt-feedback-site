@@ -1,18 +1,19 @@
 import type { CollaborationStore } from "../types";
 
-const STORAGE_KEY = "prompt-workbench-collaboration";
+const LEGACY_STORAGE_KEY = "prompt-workbench-collaboration";
+const STORAGE_KEY_PREFIX = `${LEGACY_STORAGE_KEY}:user:`;
 
-const emptyStore: CollaborationStore = {
-  comments: [],
-  copies: [],
-  changeRecords: [],
-};
+export function createEmptyCollaborationStore(): CollaborationStore {
+  return {
+    comments: [],
+    copies: [],
+    changeRecords: [],
+  };
+}
 
-export function loadCollaborationStore(): CollaborationStore {
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-
+function parseStore(raw: string | null): CollaborationStore | null {
   if (!raw) {
-    return emptyStore;
+    return null;
   }
 
   try {
@@ -23,10 +24,35 @@ export function loadCollaborationStore(): CollaborationStore {
       changeRecords: parsed.changeRecords ?? [],
     };
   } catch {
-    return emptyStore;
+    return null;
   }
 }
 
-export function saveCollaborationStore(store: CollaborationStore) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+function getScopedStorageKey(userId: string) {
+  return `${STORAGE_KEY_PREFIX}${userId}`;
+}
+
+export function loadCollaborationStore(userId: string): CollaborationStore {
+  const scopedStore = parseStore(
+    window.localStorage.getItem(getScopedStorageKey(userId)),
+  );
+  if (scopedStore) {
+    return scopedStore;
+  }
+
+  const legacyStore = parseStore(window.localStorage.getItem(LEGACY_STORAGE_KEY));
+  if (legacyStore) {
+    window.localStorage.setItem(
+      getScopedStorageKey(userId),
+      JSON.stringify(legacyStore),
+    );
+    window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+    return legacyStore;
+  }
+
+  return createEmptyCollaborationStore();
+}
+
+export function saveCollaborationStore(userId: string, store: CollaborationStore) {
+  window.localStorage.setItem(getScopedStorageKey(userId), JSON.stringify(store));
 }

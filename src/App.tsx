@@ -9,13 +9,13 @@ import {
 import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { parseDocxToPromptDocument } from "./utils/docxParser";
 import { Header } from "./components/Header";
+import { LoginScreen } from "./components/LoginScreen";
 import { Sidebar } from "./components/Sidebar";
 import { ModuleCard } from "./components/ModuleCard";
 import { CommentsPanel } from "./components/CommentsPanel";
 import { OverviewPanel } from "./components/OverviewPanel";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { DiffPanel } from "./components/DiffPanel";
-import { mockUsers } from "./data/mockUsers";
 import type {
   CommentItem,
   ExcerptSelection,
@@ -26,12 +26,17 @@ import type {
 } from "./types";
 import {
   createModuleComment,
-  fetchAuthUser,
   fetchModuleComments,
   updateRemoteCommentStatus,
 } from "./utils/commentsApi";
+import type { AuthUser } from "./utils/authApi";
+import { fetchAuthUser, loginWithEmail, logoutUser } from "./utils/authApi";
 import { countMatches, makeId } from "./utils/helpers";
-import { loadCollaborationStore, saveCollaborationStore } from "./utils/storage";
+import {
+  createEmptyCollaborationStore,
+  loadCollaborationStore,
+  saveCollaborationStore,
+} from "./utils/storage";
 
 const DEFAULT_DOC_URL = "/sample/msl_prompt.docx";
 const DEFAULT_DOC_PATH = "/Users/andywang/Downloads/AI MSL/msl_prompt.docx";
@@ -40,22 +45,20 @@ function App() {
   const [document, setDocument] = useState<PromptDocument>();
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string>();
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [loginError, setLoginError] = useState<string>();
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("readable");
   const [sidePanelTab, setSidePanelTab] = useState<SidePanelTab>("overview");
   const [searchValue, setSearchValue] = useState("");
-  const [currentUserId, setCurrentUserId] = useState("userA");
   const [activeModuleId, setActiveModuleId] = useState<string>();
-  const [collaboration, setCollaboration] = useState(() => loadCollaborationStore());
+  const [collaboration, setCollaboration] = useState(createEmptyCollaborationStore);
+  const [isCollaborationReady, setIsCollaborationReady] = useState(false);
   const [activeCopyId, setActiveCopyId] = useState<string>();
   const [onlyOpenComments, setOnlyOpenComments] = useState(false);
   const [selectedExcerpt, setSelectedExcerpt] = useState<ExcerptSelection>();
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
-  const [authUser, setAuthUser] = useState<{
-    id: string;
-    name: string;
-    role?: string;
-    email?: string;
-  } | null>(null);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [commentsApiAvailable, setCommentsApiAvailable] = useState<boolean | null>(null);
   const [remoteCommentsByModule, setRemoteCommentsByModule] = useState<
     Record<string, CommentItem[]>
@@ -69,10 +72,6 @@ function App() {
   const [rightPanelWidth, setRightPanelWidth] = useState(420);
   const [isResizingPanel, setIsResizingPanel] = useState(false);
   const moduleRefs = useRef<Record<string, HTMLElement | null>>({});
-
-  useEffect(() => {
-    saveCollaborationStore(collaboration);
-  }, [collaboration]);
 
   useEffect(() => {
     async function loadDefaultDocument() {
@@ -112,13 +111,56 @@ function App() {
         setAuthUser(user);
       } catch {
         setAuthUser(null);
+      } finally {
+        setIsAuthLoading(false);
       }
     }
 
     void loadAuthUser();
   }, []);
 
-  const currentUser = mockUsers.find((user) => user.id === currentUserId) ?? mockUsers[0];
+  useEffect(() => {
+    if (isAuthLoading) {
+      return;
+    }
+
+    if (!authUser?.id) {
+      setCollaboration(createEmptyCollaborationStore());
+      setActiveCopyId(undefined);
+      setDraftEdits({});
+      setSelectedExcerpt(undefined);
+      setSidePanelTab("overview");
+      setIsCollaborationReady(false);
+      return;
+    }
+
+    setCollaboration(loadCollaborationStore(authUser.id));
+    setActiveCopyId(undefined);
+    setDraftEdits({});
+    setSelectedExcerpt(undefined);
+    setSidePanelTab("overview");
+    setIsCollaborationReady(true);
+  }, [authUser?.id, isAuthLoading]);
+
+  useEffect(() => {
+    if (!authUser?.id || !isCollaborationReady) {
+      return;
+    }
+
+    saveCollaborationStore(authUser.id, collaboration);
+  }, [authUser?.id, collaboration, isCollaborationReady]);
+
+  const currentUser = authUser
+    ? {
+        id: authUser.id,
+        name: authUser.name?.trim() || authUser.email || "未命名用户",
+        role: (authUser.role === "admin" ? "admin" : "user") as "admin" | "user",
+      }
+    : {
+        id: "anonymous",
+        name: "未登录用户",
+        role: "user" as const,
+      };
   const isAdmin = currentUser.role === "admin";
   const activeCopy = collaboration.copies.find((copy) => copy.id === activeCopyId);
   const userExistingCopy = collaboration.copies.find(
@@ -182,17 +224,33 @@ function App() {
 
     const mergedCounts = { ...localCounts };
     Object.entries(remoteCommentsByModule).forEach(([moduleId, comments]) => {
+      if (commentsErrorByModule[moduleId]?.includes("已回退到本地评论模式")) {
+        return;
+      }
       mergedCounts[moduleId] = comments.length;
     });
     return mergedCounts;
-  }, [collaboration.comments, commentsApiAvailable, remoteCommentsByModule]);
+  }, [
+    collaboration.comments,
+    commentsApiAvailable,
+    commentsErrorByModule,
+    remoteCommentsByModule,
+  ]);
 
   const moduleComments = useMemo(() => {
     if (!activeModule) {
       return collaboration.comments.filter((comment) => comment.targetType === "document");
     }
 
-    if (commentsApiAvailable && remoteCommentsByModule[activeModule.id] !== undefined) {
+    const hasModuleLevelLocalFallback = commentsErrorByModule[activeModule.id]?.includes(
+      "已回退到本地评论模式",
+    );
+
+    if (
+      !hasModuleLevelLocalFallback &&
+      commentsApiAvailable &&
+      remoteCommentsByModule[activeModule.id] !== undefined
+    ) {
       return remoteCommentsByModule[activeModule.id] ?? [];
     }
 
@@ -200,7 +258,13 @@ function App() {
       (comment) =>
         comment.moduleId === activeModule.id || comment.targetType === "document",
     );
-  }, [activeModule, collaboration.comments, commentsApiAvailable, remoteCommentsByModule]);
+  }, [
+    activeModule,
+    collaboration.comments,
+    commentsApiAvailable,
+    commentsErrorByModule,
+    remoteCommentsByModule,
+  ]);
 
   useEffect(() => {
     setDraftEdits(activeCopy?.moduleOverrides ?? {});
@@ -587,20 +651,34 @@ function App() {
     activeModule && activeCopy
       ? draftEdits[activeModule.id] ?? activeCopy.moduleOverrides[activeModule.id]
       : undefined;
+  const activeModuleError = activeModule ? commentsErrorByModule[activeModule.id] : undefined;
+  const hasModuleLevelLocalFallback = Boolean(
+    activeModuleError?.includes("已回退到本地评论模式"),
+  );
+  const hasRemoteCommentsForActiveModule = Boolean(
+    activeModule && remoteCommentsByModule[activeModule.id] !== undefined,
+  );
   const commentsActor = authUser
     ? {
         id: authUser.id,
-        name: authUser.name,
+        name: authUser.name?.trim() || authUser.email || currentUser.name,
         role: (authUser.role === "admin" ? "admin" : "user") as "admin" | "user",
       }
     : currentUser;
-  const isRemoteCommentContext = Boolean(activeModule) && commentsApiAvailable !== false;
+  const isRemoteCommentContext = Boolean(
+    activeModule &&
+      !hasModuleLevelLocalFallback &&
+      (hasRemoteCommentsForActiveModule ||
+        (commentsApiAvailable !== false && !activeModuleError)),
+  );
   const composerDisabled = Boolean(isRemoteCommentContext && !authUser);
-  const composerHint = isRemoteCommentContext
-    ? authUser
-      ? "当前模块评论会直接写入 Cloudflare 数据库。"
-      : "当前模块评论已接入数据库。请先登录后再发布评论。"
-    : "当前使用本地临时评论模式。";
+  const composerHint = hasModuleLevelLocalFallback
+    ? "当前模块已回退到本地临时评论模式。"
+    : isRemoteCommentContext
+      ? authUser
+        ? "当前模块评论会直接写入 Cloudflare 数据库。"
+        : "当前模块评论已接入数据库。请先登录后再发布评论。"
+      : "当前使用本地临时评论模式。";
 
   if (isLoading) {
     return (
@@ -626,6 +704,51 @@ function App() {
     );
   }
 
+  if (isAuthLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-100">
+        <div className="rounded-3xl border border-slate-200 bg-white px-6 py-5 text-sm text-slate-600 shadow-sm">
+          正在校验登录状态...
+        </div>
+      </div>
+    );
+  }
+
+  if (!authUser) {
+    return (
+      <LoginScreen
+        isSubmitting={isLoggingIn}
+        errorMessage={loginError}
+        onSubmit={async (email) => {
+          setIsLoggingIn(true);
+          setLoginError(undefined);
+          try {
+            const user = await loginWithEmail(email);
+            setAuthUser(user);
+          } catch (error) {
+            setLoginError(
+              error instanceof Error
+                ? error.message
+                : "登录失败，请确认邮箱已在授权名单中。",
+            );
+          } finally {
+            setIsLoggingIn(false);
+          }
+        }}
+      />
+    );
+  }
+
+  if (!isCollaborationReady) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-100">
+        <div className="rounded-3xl border border-slate-200 bg-white px-6 py-5 text-sm text-slate-600 shadow-sm">
+          正在同步当前账号的副本、评论与修改记录...
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(186,230,253,0.35),_transparent_38%),linear-gradient(180deg,_#f8fafc_0%,_#eef2f7_100%)] text-slate-900">
       <Header
@@ -633,9 +756,18 @@ function App() {
         onViewModeChange={setViewMode}
         searchValue={searchValue}
         onSearchChange={setSearchValue}
-        users={mockUsers}
-        currentUserId={currentUser.id}
-        onUserChange={setCurrentUserId}
+        currentUserLabel={currentUser.name}
+        currentUserRoleLabel={isAdmin ? "管理视图" : "普通用户"}
+        onLogout={async () => {
+          await logoutUser().catch(() => undefined);
+          setAuthUser(null);
+          setCollaboration(createEmptyCollaborationStore());
+          setIsCollaborationReady(false);
+          setActiveCopyId(undefined);
+          setDraftEdits({});
+          setSelectedExcerpt(undefined);
+          setLoginError(undefined);
+        }}
         onCreateCopy={handleCreateCopy}
         onReturnToBase={() => {
           setActiveCopyId(undefined);

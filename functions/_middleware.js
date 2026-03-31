@@ -24,6 +24,7 @@ export async function onRequest(context) {
         FROM sessions s
         JOIN users u ON u.id = s.user_id
         WHERE s.session_token_hash = ?
+          AND s.expires_at > CURRENT_TIMESTAMP
         LIMIT 1
       `)
       .bind(sessionTokenHash)
