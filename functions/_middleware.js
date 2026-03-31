@@ -1,69 +1,57 @@
-export function json(data, init = {}) {
-  return new Response(JSON.stringify(data), {
-    status: init.status || 200,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      ...(init.headers || {})
+import { sha256Hex, getCookie } from "./api/_lib.js";
+
+export async function onRequest(context) {
+  const { request, env } = context;
+
+  context.data.user = null;
+
+  const sessionToken = getCookie(request, "session");
+
+  if (sessionToken) {
+    const sessionTokenHash = await sha256Hex(sessionToken);
+
+    const row = await env.DB
+      .prepare(`
+        SELECT
+          s.id AS session_id,
+          s.user_id,
+          s.session_token_hash,
+          s.expires_at,
+          u.email,
+          u.name,
+          u.role,
+          u.is_active
+        FROM sessions s
+        JOIN users u ON u.id = s.user_id
+        WHERE s.session_token_hash = ?
+        LIMIT 1
+      `)
+      .bind(sessionTokenHash)
+      .first();
+
+    if (row && row.is_active === 1) {
+      context.data.user = {
+        id: row.user_id,
+        email: row.email,
+        name: row.name,
+        role: row.role
+      };
     }
-  });
-}
-
-export function badRequest(message = "Bad request") {
-  return json({ error: message }, { status: 400 });
-}
-
-export async function sha256Hex(input) {
-  const data = new TextEncoder().encode(input);
-  const hash = await crypto.subtle.digest("SHA-256", data);
-  return [...new Uint8Array(hash)].map(b => b.toString(16).padStart(2, "0")).join("");
-}
-
-export function randomId() {
-  return crypto.randomUUID();
-}
-
-export function randomCode(length = 6) {
-  let out = "";
-  for (let i = 0; i < length; i++) out += Math.floor(Math.random() * 10);
-  return out;
-}
-
-export function normalizeEmail(email) {
-  return String(email || "").trim().toLowerCase();
-}
-
-export function getCookie(request, name) {
-  const cookie = request.headers.get("cookie") || "";
-  const parts = cookie.split(";").map(s => s.trim());
-  for (const part of parts) {
-    const [k, ...rest] = part.split("=");
-    if (k === name) return decodeURIComponent(rest.join("="));
   }
-  return null;
-}
 
-export function makeSessionCookie(token, maxAgeSeconds = 60 * 60 * 24 * 30) {
-  return [
-    `session=${encodeURIComponent(token)}`,
-    "Path=/",
-    "HttpOnly",
-    "Secure",
-    "SameSite=Lax",
-    `Max-Age=${maxAgeSeconds}`
-  ].join("; ");
-}
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type"
+      }
+    });
+  }
 
-export function clearSessionCookie() {
-  return [
-    "session=",
-    "Path=/",
-    "HttpOnly",
-    "Secure",
-    "SameSite=Lax",
-    "Max-Age=0"
-  ].join("; ");
-}
-
-export function futureIso(minutesFromNow) {
-  return new Date(Date.now() + minutesFromNow * 60 * 1000).toISOString();
+  const response = await context.next();
+  response.headers.set("Access-Control-Allow-Origin", "*");
+  response.headers.set("Access-Control-Allow-Headers", "Content-Type");
+  response.headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  return response;
 }
