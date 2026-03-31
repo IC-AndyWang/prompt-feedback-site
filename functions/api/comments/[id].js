@@ -1,5 +1,11 @@
 import { badRequest, json } from "../_lib.js";
 
+function normalizeWritableStatus(status) {
+  if (status === "resolved") return "resolved";
+  if (status === "open" || status === "active") return "open";
+  return null;
+}
+
 export async function onRequestPut(context) {
   const { env, data, request, params } = context;
 
@@ -16,12 +22,18 @@ export async function onRequestPut(context) {
     return badRequest("Invalid JSON");
   }
 
-  const content = String(body.content || "").trim();
-  if (!content) return badRequest("content is required");
+  const nextContent =
+    typeof body.content === "string" ? String(body.content).trim() : undefined;
+  const nextStatus =
+    typeof body.status === "string" ? normalizeWritableStatus(body.status.trim()) : undefined;
+
+  if (!nextContent && !nextStatus) {
+    return badRequest("content or status is required");
+  }
 
   const comment = await env.DB
     .prepare(`
-      SELECT id, user_id, status
+      SELECT id, user_id, status, content
       FROM comments
       WHERE id = ?
       LIMIT 1
@@ -29,7 +41,7 @@ export async function onRequestPut(context) {
     .bind(id)
     .first();
 
-  if (!comment || comment.status !== "active") {
+  if (!comment || comment.status === "deleted") {
     return json({ error: "Comment not found" }, { status: 404 });
   }
 
@@ -40,10 +52,14 @@ export async function onRequestPut(context) {
   await env.DB
     .prepare(`
       UPDATE comments
-      SET content = ?, updated_at = CURRENT_TIMESTAMP
+      SET content = ?, status = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `)
-    .bind(content, id)
+    .bind(
+      nextContent || comment.content,
+      nextStatus || normalizeWritableStatus(comment.status) || "open",
+      id
+    )
     .run();
 
   return json({ ok: true });
@@ -68,7 +84,7 @@ export async function onRequestDelete(context) {
     .bind(id)
     .first();
 
-  if (!comment || comment.status !== "active") {
+  if (!comment || comment.status === "deleted") {
     return json({ error: "Comment not found" }, { status: 404 });
   }
 

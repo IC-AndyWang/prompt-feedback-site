@@ -24,6 +24,12 @@ import type {
   SidePanelTab,
   ViewMode,
 } from "./types";
+import {
+  createModuleComment,
+  fetchAuthUser,
+  fetchModuleComments,
+  updateRemoteCommentStatus,
+} from "./utils/commentsApi";
 import { countMatches, makeId } from "./utils/helpers";
 import { loadCollaborationStore, saveCollaborationStore } from "./utils/storage";
 
@@ -44,6 +50,22 @@ function App() {
   const [onlyOpenComments, setOnlyOpenComments] = useState(false);
   const [selectedExcerpt, setSelectedExcerpt] = useState<ExcerptSelection>();
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
+  const [authUser, setAuthUser] = useState<{
+    id: string;
+    name: string;
+    role?: string;
+    email?: string;
+  } | null>(null);
+  const [commentsApiAvailable, setCommentsApiAvailable] = useState<boolean | null>(null);
+  const [remoteCommentsByModule, setRemoteCommentsByModule] = useState<
+    Record<string, CommentItem[]>
+  >({});
+  const [commentsLoadingByModule, setCommentsLoadingByModule] = useState<
+    Record<string, boolean>
+  >({});
+  const [commentsErrorByModule, setCommentsErrorByModule] = useState<
+    Record<string, string | undefined>
+  >({});
   const [rightPanelWidth, setRightPanelWidth] = useState(420);
   const [isResizingPanel, setIsResizingPanel] = useState(false);
   const moduleRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -81,6 +103,19 @@ function App() {
     }
 
     void loadDefaultDocument();
+  }, []);
+
+  useEffect(() => {
+    async function loadAuthUser() {
+      try {
+        const user = await fetchAuthUser();
+        setAuthUser(user);
+      } catch {
+        setAuthUser(null);
+      }
+    }
+
+    void loadAuthUser();
   }, []);
 
   const currentUser = mockUsers.find((user) => user.id === currentUserId) ?? mockUsers[0];
@@ -134,26 +169,95 @@ function App() {
   }, [activeModuleId, modulesWithSearch]);
 
   const commentCountByModule = useMemo(() => {
-    return collaboration.comments.reduce<Record<string, number>>((acc, comment) => {
+    const localCounts = collaboration.comments.reduce<Record<string, number>>((acc, comment) => {
       if (comment.moduleId) {
         acc[comment.moduleId] = (acc[comment.moduleId] ?? 0) + 1;
       }
       return acc;
     }, {});
-  }, [collaboration.comments]);
+
+    if (!commentsApiAvailable) {
+      return localCounts;
+    }
+
+    const mergedCounts = { ...localCounts };
+    Object.entries(remoteCommentsByModule).forEach(([moduleId, comments]) => {
+      mergedCounts[moduleId] = comments.length;
+    });
+    return mergedCounts;
+  }, [collaboration.comments, commentsApiAvailable, remoteCommentsByModule]);
 
   const moduleComments = useMemo(() => {
+    if (!activeModule) {
+      return collaboration.comments.filter((comment) => comment.targetType === "document");
+    }
+
+    if (commentsApiAvailable && remoteCommentsByModule[activeModule.id] !== undefined) {
+      return remoteCommentsByModule[activeModule.id] ?? [];
+    }
+
     return collaboration.comments.filter(
       (comment) =>
-        (!activeModule && comment.targetType === "document") ||
-        (Boolean(activeModule) &&
-          (comment.moduleId === activeModule?.id || comment.targetType === "document")),
+        comment.moduleId === activeModule.id || comment.targetType === "document",
     );
-  }, [activeModule, collaboration.comments]);
+  }, [activeModule, collaboration.comments, commentsApiAvailable, remoteCommentsByModule]);
 
   useEffect(() => {
     setDraftEdits(activeCopy?.moduleOverrides ?? {});
   }, [activeCopy?.id, activeCopy?.moduleOverrides]);
+
+  useEffect(() => {
+    if (!document) {
+      return;
+    }
+
+    const currentDocument = document;
+    let cancelled = false;
+
+    async function loadCommentsForAllModules() {
+      const nextLoading = currentDocument.modules.reduce<Record<string, boolean>>((acc, module) => {
+        acc[module.id] = true;
+        return acc;
+      }, {});
+      setCommentsLoadingByModule(nextLoading);
+
+      const results = await Promise.allSettled(
+        currentDocument.modules.map(async (module) => {
+          const comments = await fetchModuleComments(module.tagName, module.id);
+          return { moduleId: module.id, comments };
+        }),
+      );
+
+      if (cancelled) {
+        return;
+      }
+
+      const nextComments: Record<string, CommentItem[]> = {};
+      const nextErrors: Record<string, string | undefined> = {};
+      let hasRemoteSuccess = false;
+
+      results.forEach((result, index) => {
+        const module = currentDocument.modules[index];
+        if (result.status === "fulfilled") {
+          hasRemoteSuccess = true;
+          nextComments[module.id] = result.value.comments;
+        } else {
+          nextErrors[module.id] = "当前未能读取数据库评论，已回退到本地评论模式。";
+        }
+      });
+
+      setCommentsApiAvailable(hasRemoteSuccess);
+      setRemoteCommentsByModule(nextComments);
+      setCommentsErrorByModule(nextErrors);
+      setCommentsLoadingByModule({});
+    }
+
+    void loadCommentsForAllModules();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [document]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -231,6 +335,9 @@ function App() {
       setSearchValue("");
       setSidePanelTab("overview");
       setSelectedExcerpt(undefined);
+      setRemoteCommentsByModule({});
+      setCommentsErrorByModule({});
+      setCommentsLoadingByModule({});
     } catch {
       setLoadError("上传的 docx 解析失败，请确认文件格式正确。");
     } finally {
@@ -239,15 +346,55 @@ function App() {
     }
   }
 
-  function handleAddComment(payload: {
+  async function handleAddComment(payload: {
     content: string;
     targetType: "document" | "module" | "excerpt";
     targetId: string;
     moduleId?: string;
     excerpt?: string;
   }) {
+    if (
+      activeModule &&
+      payload.targetType !== "document" &&
+      commentsApiAvailable !== false
+    ) {
+      try {
+        const created = await createModuleComment({
+          moduleKey: activeModule.tagName,
+          localModuleId: activeModule.id,
+          content: payload.content,
+          excerpt: payload.excerpt,
+        });
+
+        setCommentsApiAvailable(true);
+        setCommentsErrorByModule((previous) => ({
+          ...previous,
+          [activeModule.id]: undefined,
+        }));
+        setRemoteCommentsByModule((previous) => ({
+          ...previous,
+          [activeModule.id]: [...(previous[activeModule.id] ?? []), created],
+        }));
+        return;
+      } catch (error) {
+        const message =
+          error instanceof Error && error.message === "Login required"
+            ? "当前模块评论已接入数据库。请先登录后再发布评论。"
+            : "写入数据库评论失败，已回退到本地评论模式。";
+
+        setCommentsErrorByModule((previous) => ({
+          ...previous,
+          [activeModule.id]: message,
+        }));
+        if (error instanceof Error && error.message === "Login required") {
+          return;
+        }
+      }
+    }
+
     const comment: CommentItem = {
       id: makeId("comment"),
+      source: "local",
       targetType: payload.targetType,
       targetId: payload.targetId,
       moduleId: payload.moduleId,
@@ -266,7 +413,35 @@ function App() {
     }));
   }
 
-  function handleToggleCommentStatus(commentId: string) {
+  async function handleToggleCommentStatus(commentId: string) {
+    const targetComment = moduleComments.find((comment) => comment.id === commentId);
+    if (!targetComment) {
+      return;
+    }
+
+    if (targetComment.source === "remote" && activeModule) {
+      const nextStatus = targetComment.status === "open" ? "resolved" : "open";
+      try {
+        await updateRemoteCommentStatus(commentId, nextStatus);
+        setRemoteCommentsByModule((previous) => ({
+          ...previous,
+          [activeModule.id]: (previous[activeModule.id] ?? []).map((comment) =>
+            comment.id === commentId ? { ...comment, status: nextStatus } : comment,
+          ),
+        }));
+        setCommentsErrorByModule((previous) => ({
+          ...previous,
+          [activeModule.id]: undefined,
+        }));
+      } catch {
+        setCommentsErrorByModule((previous) => ({
+          ...previous,
+          [activeModule.id]: "更新数据库评论状态失败，请稍后再试。",
+        }));
+      }
+      return;
+    }
+
     setCollaboration((previous) => ({
       ...previous,
       comments: previous.comments.map((comment) =>
@@ -412,6 +587,20 @@ function App() {
     activeModule && activeCopy
       ? draftEdits[activeModule.id] ?? activeCopy.moduleOverrides[activeModule.id]
       : undefined;
+  const commentsActor = authUser
+    ? {
+        id: authUser.id,
+        name: authUser.name,
+        role: (authUser.role === "admin" ? "admin" : "user") as "admin" | "user",
+      }
+    : currentUser;
+  const isRemoteCommentContext = Boolean(activeModule) && commentsApiAvailable !== false;
+  const composerDisabled = Boolean(isRemoteCommentContext && !authUser);
+  const composerHint = isRemoteCommentContext
+    ? authUser
+      ? "当前模块评论会直接写入 Cloudflare 数据库。"
+      : "当前模块评论已接入数据库。请先登录后再发布评论。"
+    : "当前使用本地临时评论模式。";
 
   if (isLoading) {
     return (
@@ -644,8 +833,12 @@ function App() {
                 comments={moduleComments}
                 modules={document.modules}
                 currentModule={activeModule}
-                currentUser={currentUser}
+                currentUser={commentsActor}
                 onlyOpen={onlyOpenComments}
+                isLoading={Boolean(activeModule && commentsLoadingByModule[activeModule.id])}
+                errorMessage={activeModule ? commentsErrorByModule[activeModule.id] : undefined}
+                composerDisabled={composerDisabled}
+                composerHint={composerHint}
                 selectedExcerpt={selectedExcerpt}
                 onClearExcerpt={() => setSelectedExcerpt(undefined)}
                 onToggleOnlyOpen={() => setOnlyOpenComments((previous) => !previous)}

@@ -45,6 +45,7 @@ export interface CommentReply {
 
 export interface CommentItem {
   id: string;
+  source?: "local" | "remote";
   targetType: CommentTargetType;
   targetId: string;
   moduleId?: string;

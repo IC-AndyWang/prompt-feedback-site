@@ -14,6 +14,10 @@ interface CommentsPanelProps {
   currentModule?: PromptModule;
   currentUser: User;
   onlyOpen: boolean;
+  isLoading?: boolean;
+  errorMessage?: string;
+  composerDisabled?: boolean;
+  composerHint?: string;
   selectedExcerpt?: ExcerptSelection;
   onClearExcerpt: () => void;
   onToggleOnlyOpen: () => void;
@@ -33,6 +37,10 @@ export function CommentsPanel({
   currentModule,
   currentUser,
   onlyOpen,
+  isLoading,
+  errorMessage,
+  composerDisabled,
+  composerHint,
   selectedExcerpt,
   onClearExcerpt,
   onToggleOnlyOpen,
@@ -109,6 +117,7 @@ export function CommentsPanel({
           <textarea
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
+            disabled={composerDisabled}
             placeholder={
               selectedExcerpt
                 ? "围绕这段具体内容写下你的建议或疑问"
@@ -116,12 +125,15 @@ export function CommentsPanel({
                 ? "围绕当前模块写下建议、疑问或优化意见"
                 : "围绕整份 Prompt 写下整体评论"
             }
-            className="min-h-28 w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700 outline-none transition focus:border-sky-400"
+            className="min-h-28 w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700 outline-none transition focus:border-sky-400 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
           />
+          {composerHint ? (
+            <p className="mt-3 text-xs leading-6 text-slate-500">{composerHint}</p>
+          ) : null}
           <button
             type="button"
             onClick={() => {
-              if (!draft.trim()) {
+              if (!draft.trim() || composerDisabled) {
                 return;
               }
               onAddComment({
@@ -134,12 +146,25 @@ export function CommentsPanel({
               setDraft("");
               onClearExcerpt();
             }}
-            className="mt-3 inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+            disabled={composerDisabled}
+            className="mt-3 inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             <SendHorizonal className="h-4 w-4" />
             发布评论
           </button>
         </div>
+
+        {isLoading ? (
+          <div className="rounded-3xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm">
+            正在加载数据库中的评论...
+          </div>
+        ) : null}
+
+        {errorMessage ? (
+          <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900 shadow-sm">
+            {errorMessage}
+          </div>
+        ) : null}
 
         {filteredComments.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-6 text-sm leading-6 text-slate-500">

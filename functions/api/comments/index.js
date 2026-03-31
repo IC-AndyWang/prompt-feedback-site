@@ -1,38 +1,70 @@
 import { badRequest, json, randomId } from "../_lib.js";
 
+function normalizeCommentStatus(status) {
+  if (status === "resolved") return "resolved";
+  if (status === "deleted") return "deleted";
+  return "open";
+}
+
 export async function onRequestGet(context) {
   const { request, env } = context;
   const url = new URL(request.url);
   const moduleId = url.searchParams.get("moduleId");
+  const moduleKey = url.searchParams.get("moduleKey");
 
-  if (!moduleId) {
-    return badRequest("moduleId is required");
+  if (!moduleId && !moduleKey) {
+    return badRequest("moduleId or moduleKey is required");
   }
 
-  const result = await env.DB
-    .prepare(`
-      SELECT
-        c.id,
-        c.module_id,
-        c.user_id,
-        c.parent_id,
-        c.content,
-        c.status,
-        c.created_at,
-        c.updated_at,
-        u.email,
-        u.name
-      FROM comments c
-      JOIN users u ON u.id = c.user_id
-      WHERE c.module_id = ?
-        AND c.status = 'active'
-      ORDER BY c.created_at ASC
-    `)
-    .bind(moduleId)
-    .run();
+  const statement = moduleId
+    ? env.DB.prepare(`
+        SELECT
+          c.id,
+          c.module_id,
+          m.module_key,
+          c.user_id,
+          c.parent_id,
+          c.content,
+          c.status,
+          c.created_at,
+          c.updated_at,
+          u.email,
+          u.name
+        FROM comments c
+        JOIN users u ON u.id = c.user_id
+        JOIN modules m ON m.id = c.module_id
+        WHERE c.module_id = ?
+          AND c.status != 'deleted'
+        ORDER BY c.created_at ASC
+      `).bind(moduleId)
+    : env.DB.prepare(`
+        SELECT
+          c.id,
+          c.module_id,
+          m.module_key,
+          c.user_id,
+          c.parent_id,
+          c.content,
+          c.status,
+          c.created_at,
+          c.updated_at,
+          u.email,
+          u.name
+        FROM comments c
+        JOIN users u ON u.id = c.user_id
+        JOIN modules m ON m.id = c.module_id
+        WHERE m.module_key = ?
+          AND c.status != 'deleted'
+        ORDER BY c.created_at ASC
+      `).bind(moduleKey);
+
+  const result = await statement.run();
 
   return json({
-    comments: result.results || []
+    comments: (result.results || []).map((row) => ({
+      ...row,
+      status: normalizeCommentStatus(row.status)
+    }))
   });
 }
 
@@ -50,20 +82,28 @@ export async function onRequestPost(context) {
     return badRequest("Invalid JSON");
   }
 
-  const moduleId = String(body.moduleId || "").trim();
+  const moduleId = body.moduleId ? String(body.moduleId).trim() : "";
+  const moduleKey = body.moduleKey ? String(body.moduleKey).trim() : "";
   const content = String(body.content || "").trim();
   const parentId = body.parentId ? String(body.parentId).trim() : null;
 
-  if (!moduleId) return badRequest("moduleId is required");
+  if (!moduleId && !moduleKey) {
+    return badRequest("moduleId or moduleKey is required");
+  }
   if (!content) return badRequest("content is required");
   if (content.length > 5000) return badRequest("Comment is too long");
 
-  const moduleExists = await env.DB
-    .prepare(`SELECT id FROM modules WHERE id = ? LIMIT 1`)
-    .bind(moduleId)
-    .first();
+  const moduleRecord = moduleId
+    ? await env.DB
+        .prepare(`SELECT id, module_key FROM modules WHERE id = ? LIMIT 1`)
+        .bind(moduleId)
+        .first()
+    : await env.DB
+        .prepare(`SELECT id, module_key FROM modules WHERE module_key = ? LIMIT 1`)
+        .bind(moduleKey)
+        .first();
 
-  if (!moduleExists) {
+  if (!moduleRecord) {
     return badRequest("Module not found");
   }
 
@@ -73,9 +113,9 @@ export async function onRequestPost(context) {
     .prepare(`
       INSERT INTO comments (
         id, module_id, user_id, parent_id, content, status, created_at
-      ) VALUES (?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, ?, ?, 'open', CURRENT_TIMESTAMP)
     `)
-    .bind(id, moduleId, data.user.id, parentId, content)
+    .bind(id, moduleRecord.id, data.user.id, parentId, content)
     .run();
 
   const inserted = await env.DB
@@ -83,6 +123,7 @@ export async function onRequestPost(context) {
       SELECT
         c.id,
         c.module_id,
+        m.module_key,
         c.user_id,
         c.parent_id,
         c.content,
@@ -93,6 +134,7 @@ export async function onRequestPost(context) {
         u.name
       FROM comments c
       JOIN users u ON u.id = c.user_id
+      JOIN modules m ON m.id = c.module_id
       WHERE c.id = ?
       LIMIT 1
     `)
@@ -102,6 +144,11 @@ export async function onRequestPost(context) {
   return json({
     ok: true,
     comment: inserted
+      ? {
+          ...inserted,
+          status: normalizeCommentStatus(inserted.status)
+        }
+      : null
   });
 }
 
@@ -110,10 +157,3 @@ export async function onRequest(context) {
   if (context.request.method === "POST") return onRequestPost(context);
   return new Response("Method Not Allowed", { status: 405 });
 }
-
-// return json({
-//   comments: result.results || [],
-//   debug: {
-//     deployment: env.CF_PAGES_COMMIT_SHA || "unknown"
-//   }
-// });
