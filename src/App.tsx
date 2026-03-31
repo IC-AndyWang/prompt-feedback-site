@@ -213,6 +213,9 @@ function App() {
       };
   const isAdmin = currentUser.role === "admin";
   const activeCopy = collaboration.copies.find((copy) => copy.id === activeCopyId);
+  const isEditingCopyMode = Boolean(activeCopy && activeCopy.ownerId === currentUser.id);
+  const effectiveViewMode: ViewMode =
+    isEditingCopyMode && viewMode === "raw" ? "readable" : viewMode;
   const userExistingCopy = collaboration.copies.find(
     (copy) => copy.ownerId === currentUser.id && copy.baseDocumentId === document?.id,
   );
@@ -552,6 +555,7 @@ function App() {
     );
 
     if (existing) {
+      setViewMode("readable");
       setActiveCopyId(existing.id);
       setDraftEdits(existing.moduleOverrides);
       setSidePanelTab("diff");
@@ -588,6 +592,7 @@ function App() {
         }));
         setWorkbenchApiAvailable(true);
         setWorkbenchError(undefined);
+        setViewMode("readable");
         setActiveCopyId(remoteCopy.id);
         setDraftEdits(remoteCopy.moduleOverrides);
         setSidePanelTab("history");
@@ -606,6 +611,7 @@ function App() {
       ...previous,
       copies: [copy, ...previous.copies],
     }));
+    setViewMode("readable");
     setActiveCopyId(copy.id);
     setDraftEdits({});
     setSidePanelTab("history");
@@ -839,7 +845,7 @@ function App() {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(186,230,253,0.35),_transparent_38%),linear-gradient(180deg,_#f8fafc_0%,_#eef2f7_100%)] text-slate-900">
       <Header
-        viewMode={viewMode}
+        viewMode={effectiveViewMode}
         onViewModeChange={setViewMode}
         searchValue={searchValue}
         onSearchChange={setSearchValue}
@@ -866,6 +872,7 @@ function App() {
         }}
         activeCopyName={activeCopy?.name}
         hasExistingCopy={Boolean(userExistingCopy)}
+        isEditingCopy={isEditingCopyMode}
       />
 
       <main
@@ -883,6 +890,7 @@ function App() {
           commentCountByModule={commentCountByModule}
           changedModuleIds={changedModuleIds}
           searchValue={searchValue}
+          isEditingCopy={isEditingCopyMode}
         />
 
         <section className="min-w-0 space-y-5">
@@ -993,7 +1001,7 @@ function App() {
               <ModuleCard
                 module={module}
                 allModules={document.modules}
-                viewMode={viewMode}
+                viewMode={effectiveViewMode}
                 searchValue={searchValue}
                 commentCount={commentCountByModule[module.id] ?? 0}
                 isEditable={Boolean(activeCopy && activeCopy.ownerId === currentUser.id)}
@@ -1033,8 +1041,8 @@ function App() {
             )}
           </button>
 
-          <aside className="sticky top-[148px] overflow-visible rounded-[28px] border border-slate-200 bg-white shadow-sm">
-            <div className="sticky top-[148px] z-10 border-b border-slate-200 bg-white px-3 py-2">
+          <aside className="sticky top-[148px] flex h-[calc(100vh-164px)] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+            <div className="sticky top-0 z-10 border-b border-slate-200 bg-white px-3 py-2">
               <div className="mb-2 px-1 text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
                 右侧工作台
               </div>
@@ -1091,6 +1099,7 @@ function App() {
                 isAdmin={isAdmin}
                 activeCopyId={activeCopyId}
                 onSelectCopy={(copyId) => {
+                  setViewMode("readable");
                   setActiveCopyId(copyId);
                   setSidePanelTab("diff");
                 }}

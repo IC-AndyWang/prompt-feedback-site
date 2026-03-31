@@ -1,6 +1,7 @@
 import { diffLines, type Change } from "diff";
 import { FileDiff } from "lucide-react";
 import type { PromptModule } from "../types";
+import { isRichTextHtml, richTextToPlainText } from "../utils/richText";
 
 interface DiffPanelProps {
   currentModule?: PromptModule;
@@ -20,16 +21,26 @@ export function DiffPanel({
     typeof originalText === "string" &&
     typeof changedText === "string" &&
     originalText !== changedText;
+  const originalDiffText = originalText
+    ? isRichTextHtml(originalText)
+      ? richTextToPlainText(originalText)
+      : originalText
+    : originalText;
+  const changedDiffText = changedText
+    ? isRichTextHtml(changedText)
+      ? richTextToPlainText(changedText)
+      : changedText
+    : changedText;
 
   const diffs =
-    hasDiff && originalText && changedText
-      ? diffLines(originalText, changedText)
+    hasDiff && originalDiffText && changedDiffText
+      ? diffLines(originalDiffText, changedDiffText)
       : [];
   const addedBlocks = diffs.filter((part) => part.added).length;
   const removedBlocks = diffs.filter((part) => part.removed).length;
 
   return (
-    <div className="flex flex-col">
+    <div className="flex h-full flex-col">
       <div className="border-b border-slate-200 px-5 py-4">
         <div className="flex items-center gap-2">
           <FileDiff className="h-4 w-4 text-slate-500" />
@@ -42,7 +53,7 @@ export function DiffPanel({
         </p>
       </div>
 
-      <div className="px-5 py-4">
+      <div className="flex-1 overflow-y-auto px-5 py-4">
         {!hasDiff ? (
           <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-6 text-sm leading-6 text-slate-500">
             当前模块尚无改动，或你还没有进入个人副本模式。
@@ -68,17 +79,31 @@ export function DiffPanel({
                 <div className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                   主版本
                 </div>
-                <pre className="whitespace-pre-wrap break-words rounded-2xl bg-slate-50 p-3 font-mono text-xs leading-6 text-slate-700">
-                  {originalText}
-                </pre>
+                {originalText && isRichTextHtml(originalText) ? (
+                  <div
+                    className="prose prose-slate max-w-none rounded-2xl bg-slate-50 p-3 text-sm leading-7 text-slate-700"
+                    dangerouslySetInnerHTML={{ __html: originalText }}
+                  />
+                ) : (
+                  <pre className="whitespace-pre-wrap break-words rounded-2xl bg-slate-50 p-3 font-mono text-xs leading-6 text-slate-700">
+                    {originalText}
+                  </pre>
+                )}
               </div>
               <div className="rounded-3xl border border-sky-200 bg-white p-4 shadow-sm">
                 <div className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                   当前副本
                 </div>
-                <pre className="whitespace-pre-wrap break-words rounded-2xl bg-sky-50 p-3 font-mono text-xs leading-6 text-sky-950">
-                  {changedText}
-                </pre>
+                {changedText && isRichTextHtml(changedText) ? (
+                  <div
+                    className="prose prose-slate max-w-none rounded-2xl bg-sky-50 p-3 text-sm leading-7 text-sky-950"
+                    dangerouslySetInnerHTML={{ __html: changedText }}
+                  />
+                ) : (
+                  <pre className="whitespace-pre-wrap break-words rounded-2xl bg-sky-50 p-3 font-mono text-xs leading-6 text-sky-950">
+                    {changedText}
+                  </pre>
+                )}
               </div>
             </div>
 

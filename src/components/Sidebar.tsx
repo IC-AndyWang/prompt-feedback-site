@@ -9,6 +9,7 @@ interface SidebarProps {
   commentCountByModule: Record<string, number>;
   changedModuleIds: string[];
   searchValue: string;
+  isEditingCopy: boolean;
 }
 
 export function Sidebar({
@@ -18,14 +19,22 @@ export function Sidebar({
   commentCountByModule,
   changedModuleIds,
   searchValue,
+  isEditingCopy,
 }: SidebarProps) {
   return (
     <aside className="sticky top-[168px] h-[calc(100vh-184px)] overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-100 px-5 py-4">
         <h2 className="text-sm font-semibold text-slate-900">模块导航</h2>
         <p className="mt-1 text-xs leading-5 text-slate-500">
-          点击模块可跳转阅读，并查看评论数量与结构位置。
+          {isEditingCopy
+            ? "当前为副本编辑模式。点击左侧任一模块，可直接切换到对应内容区继续编辑。"
+            : "点击模块可跳转阅读，并查看评论数量与结构位置。"}
         </p>
+        {isEditingCopy ? (
+          <div className="mt-3 rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-900">
+            当前左侧导航已进入编辑态，带“编辑中”或“已改”标记的模块可直接定位到可编辑区域。
+          </div>
+        ) : null}
       </div>
 
       <div className="h-[calc(100%-81px)] overflow-y-auto px-3 py-3">
@@ -62,6 +71,11 @@ export function Sidebar({
                 {changedModuleIds.includes(module.id) ? (
                   <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-800">
                     已改
+                  </span>
+                ) : null}
+                {isEditingCopy && activeModuleId === module.id ? (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-900">
+                    编辑中
                   </span>
                 ) : null}
               </div>

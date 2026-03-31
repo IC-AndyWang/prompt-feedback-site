@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
 import { CodeXml, Columns2, MessageSquarePlus, PencilLine } from "lucide-react";
+import { RichTextModuleEditor } from "./RichTextModuleEditor";
 import type { PromptModule, ViewMode } from "../types";
 import {
   cn,
@@ -10,6 +10,7 @@ import {
   standaloneCodeLinePattern,
   type ModuleLinkTarget,
 } from "../utils/helpers";
+import { isRichTextHtml } from "../utils/richText";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -53,7 +54,6 @@ export function ModuleCard({
   onJumpToModule,
   onExcerptSelect,
 }: ModuleCardProps) {
-  const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const currentContent = editedContent ?? module.readableContent;
   const tone = cardTones[module.order % cardTones.length];
   const showReadable = viewMode === "readable" || viewMode === "compare";
@@ -68,16 +68,7 @@ export function ModuleCard({
     moduleTargets,
     onJumpToModule,
   };
-
-  useEffect(() => {
-    const textarea = editorRef.current;
-    if (!textarea || !isEditable) {
-      return;
-    }
-
-    textarea.style.height = "0px";
-    textarea.style.height = `${textarea.scrollHeight}px`;
-  }, [currentContent, isEditable]);
+  const showRichTextContent = isRichTextHtml(currentContent);
 
   return (
     <section
@@ -162,28 +153,30 @@ export function ModuleCard({
           {showReadable ? (
             <div className="rounded-3xl border border-slate-200 bg-white p-5">
               <div className="mb-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                可读版
+                {isEditable ? "副本编辑区" : "可读版"}
               </div>
               {isEditable ? (
-                <textarea
-                  ref={editorRef}
+                <RichTextModuleEditor
                   value={currentContent}
-                  onChange={(event) => {
-                    onEditedContentChange(module.id, event.target.value);
-                    requestAnimationFrame(() => {
-                      const textarea = editorRef.current;
-                      if (!textarea) {
-                        return;
-                      }
-                      textarea.style.height = "0px";
-                      textarea.style.height = `${textarea.scrollHeight}px`;
-                    });
+                  modules={allModules}
+                  onChange={(value) => onEditedContentChange(module.id, value)}
+                  onCommit={() => onEditedContentCommit(module.id)}
+                />
+              ) : showRichTextContent ? (
+                <div
+                  className="prose prose-slate max-w-none text-sm leading-7"
+                  onMouseUp={() => onExcerptSelect(module.id)}
+                  onClick={(event) => {
+                    const target = (event.target as HTMLElement).closest("[data-module-id]");
+                    const targetId = target?.getAttribute("data-module-id");
+                    if (!targetId) {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    onJumpToModule(targetId);
                   }}
-                  onBlur={() => {
-                    void onEditedContentCommit(module.id);
-                  }}
-                  rows={1}
-                  className="min-h-[280px] w-full resize-none overflow-hidden rounded-3xl border border-slate-200 bg-slate-50 p-4 text-sm leading-7 text-slate-800 outline-none transition focus:border-sky-400"
+                  dangerouslySetInnerHTML={{ __html: currentContent }}
                 />
               ) : (
                 <div

@@ -62,7 +62,7 @@ export function CommentsPanel({
   const moduleNameMap = new Map(modules.map((module) => [module.id, module.title]));
 
   return (
-    <div className="flex flex-col">
+    <div className="flex h-full flex-col">
       <div className="border-b border-slate-200 px-5 py-4">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -88,7 +88,7 @@ export function CommentsPanel({
         </div>
       </div>
 
-      <div className="space-y-4 px-5 py-4">
+      <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
         <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
           <div className="mb-3 text-xs font-medium text-slate-500">
             以 {currentUser.name} 身份添加评论

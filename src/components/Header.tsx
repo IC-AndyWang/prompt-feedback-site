@@ -14,6 +14,7 @@ interface HeaderProps {
   onReturnToBase: () => void;
   activeCopyName?: string;
   hasExistingCopy: boolean;
+  isEditingCopy: boolean;
 }
 
 const modes: Array<{ key: ViewMode; label: string }> = [
@@ -34,6 +35,7 @@ export function Header({
   onReturnToBase,
   activeCopyName,
   hasExistingCopy,
+  isEditingCopy,
 }: HeaderProps) {
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
@@ -71,35 +73,43 @@ export function Header({
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={onCreateCopy}
-              className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-sm"
-            >
-              <GitBranchPlus className="h-4 w-4" />
-              {activeCopyName || hasExistingCopy ? "进入我的副本" : "创建我的副本"}
-            </button>
+            {!isEditingCopy ? (
+              <button
+                type="button"
+                onClick={onCreateCopy}
+                className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-sm"
+              >
+                <GitBranchPlus className="h-4 w-4" />
+                {activeCopyName || hasExistingCopy ? "进入我的副本" : "创建我的副本"}
+              </button>
+            ) : null}
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-1">
-            {modes.map((mode) => (
-              <button
-                key={mode.key}
-                type="button"
-                onClick={() => onViewModeChange(mode.key)}
-                className={cn(
-                  "rounded-full px-4 py-2 text-sm font-medium transition hover:-translate-y-0.5",
-                  viewMode === mode.key
-                    ? "bg-white text-slate-900 shadow-sm"
-                    : "text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm",
-                )}
-              >
-                {mode.label}
-              </button>
-            ))}
-          </div>
+          {isEditingCopy ? (
+            <div className="inline-flex rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-900">
+              副本编辑模式：当前只展示可读版编辑视图
+            </div>
+          ) : (
+            <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-1">
+              {modes.map((mode) => (
+                <button
+                  key={mode.key}
+                  type="button"
+                  onClick={() => onViewModeChange(mode.key)}
+                  className={cn(
+                    "rounded-full px-4 py-2 text-sm font-medium transition hover:-translate-y-0.5",
+                    viewMode === mode.key
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm",
+                  )}
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           <label className="relative min-w-[280px] flex-1">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
