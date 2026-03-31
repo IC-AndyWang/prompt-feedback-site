@@ -1,6 +1,5 @@
 import {
   type CSSProperties,
-  type ChangeEvent,
   useEffect,
   useMemo,
   useRef,
@@ -433,34 +432,6 @@ function App() {
     }
   }
 
-  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    setIsLoading(true);
-    setLoadError(undefined);
-    try {
-      const parsed = await parseDocxToPromptDocument(file, file.name);
-      setDocument(parsed);
-      setActiveModuleId(parsed.modules[0]?.id);
-      setActiveCopyId(undefined);
-      setDraftEdits({});
-      setSearchValue("");
-      setSidePanelTab("overview");
-      setSelectedExcerpt(undefined);
-      setRemoteCommentsByModule({});
-      setCommentsErrorByModule({});
-      setCommentsLoadingByModule({});
-    } catch {
-      setLoadError("上传的 docx 解析失败，请确认文件格式正确。");
-    } finally {
-      setIsLoading(false);
-      event.target.value = "";
-    }
-  }
-
   async function handleAddComment(payload: {
     content: string;
     targetType: "document" | "module" | "excerpt";
@@ -813,7 +784,7 @@ function App() {
           <h1 className="text-xl font-semibold text-slate-900">文档加载失败</h1>
           <p className="mt-3 text-sm leading-7 text-slate-600">{loadError}</p>
           <p className="mt-4 text-xs leading-6 text-slate-500">
-            你仍然可以通过页面顶部上传新的 `.docx` 文件继续使用这个原型。
+            请检查默认示例文件是否可用，或联系我继续补充新的文档来源接入方式。
           </p>
         </div>
       </div>
@@ -893,7 +864,6 @@ function App() {
           setSelectedExcerpt(undefined);
           setSidePanelTab("overview");
         }}
-        onFileChange={handleFileChange}
         activeCopyName={activeCopy?.name}
         hasExistingCopy={Boolean(userExistingCopy)}
       />
@@ -1048,7 +1018,7 @@ function App() {
           ))}
         </section>
 
-        <div className="relative min-w-[320px]">
+        <div className="relative min-w-[320px] self-start">
           <button
             type="button"
             onMouseDown={() => setIsResizingPanel(true)}
@@ -1063,8 +1033,8 @@ function App() {
             )}
           </button>
 
-          <aside className="sticky top-[148px] max-h-[calc(100vh-164px)] overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-200 px-3 py-2">
+          <aside className="sticky top-[148px] overflow-visible rounded-[28px] border border-slate-200 bg-white shadow-sm">
+            <div className="sticky top-[148px] z-10 border-b border-slate-200 bg-white px-3 py-2">
               <div className="mb-2 px-1 text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
                 右侧工作台
               </div>
@@ -1080,7 +1050,7 @@ function App() {
                     type="button"
                     onClick={() => setSidePanelTab(key as SidePanelTab)}
                     className={[
-                      "rounded-full px-3 py-2 text-xs font-medium transition",
+                      "rounded-full px-3 py-2 text-xs font-medium transition hover:-translate-y-0.5 hover:shadow-sm",
                       sidePanelTab === key
                         ? "bg-slate-900 text-white"
                         : "bg-slate-100 text-slate-600 hover:bg-slate-200",

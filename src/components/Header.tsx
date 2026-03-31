@@ -1,5 +1,4 @@
-import { FileUp, GitBranchPlus, LogOut, Search, UserCircle2 } from "lucide-react";
-import type { ChangeEvent } from "react";
+import { GitBranchPlus, LogOut, Search, UserCircle2 } from "lucide-react";
 import type { ViewMode } from "../types";
 import { cn } from "../utils/helpers";
 
@@ -13,7 +12,6 @@ interface HeaderProps {
   onLogout: () => void;
   onCreateCopy: () => void;
   onReturnToBase: () => void;
-  onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   activeCopyName?: string;
   hasExistingCopy: boolean;
 }
@@ -34,7 +32,6 @@ export function Header({
   onLogout,
   onCreateCopy,
   onReturnToBase,
-  onFileChange,
   activeCopyName,
   hasExistingCopy,
 }: HeaderProps) {
@@ -63,7 +60,7 @@ export function Header({
                 <button
                   type="button"
                   onClick={onReturnToBase}
-                  className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300"
+                  className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-sm"
                 >
                   回到主版本
                 </button>
@@ -74,21 +71,10 @@ export function Header({
               </div>
             )}
 
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50">
-              <FileUp className="h-4 w-4" />
-              上传新的 docx
-              <input
-                type="file"
-                accept=".docx"
-                className="hidden"
-                onChange={onFileChange}
-              />
-            </label>
-
             <button
               type="button"
               onClick={onCreateCopy}
-              className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+              className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-sm"
             >
               <GitBranchPlus className="h-4 w-4" />
               {activeCopyName || hasExistingCopy ? "进入我的副本" : "创建我的副本"}
@@ -104,10 +90,10 @@ export function Header({
                 type="button"
                 onClick={() => onViewModeChange(mode.key)}
                 className={cn(
-                  "rounded-full px-4 py-2 text-sm font-medium transition",
+                  "rounded-full px-4 py-2 text-sm font-medium transition hover:-translate-y-0.5",
                   viewMode === mode.key
                     ? "bg-white text-slate-900 shadow-sm"
-                    : "text-slate-600 hover:text-slate-900",
+                    : "text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm",
                 )}
               >
                 {mode.label}
@@ -135,7 +121,7 @@ export function Header({
           <button
             type="button"
             onClick={onLogout}
-            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 hover:shadow-sm"
           >
             <LogOut className="h-4 w-4" />
             退出登录

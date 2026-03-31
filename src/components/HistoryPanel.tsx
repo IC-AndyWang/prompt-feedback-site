@@ -30,7 +30,7 @@ export function HistoryPanel({
     : changeRecords.filter((change) => change.authorId === currentUser.id);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex flex-col">
       <div className="border-b border-slate-200 px-5 py-4">
         <h3 className="text-sm font-semibold text-slate-900">历史记录与留痕</h3>
         <p className="mt-1 text-xs leading-5 text-slate-500">
@@ -40,7 +40,7 @@ export function HistoryPanel({
         </p>
       </div>
 
-      <div className="flex-1 space-y-6 overflow-y-auto px-5 py-4">
+      <div className="space-y-6 px-5 py-4">
         <section>
           <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
             <History className="h-4 w-4 text-slate-500" />
@@ -72,7 +72,7 @@ export function HistoryPanel({
                   type="button"
                   onClick={() => onSelectCopy(copy.id)}
                   className={[
-                    "mt-3 rounded-full px-3 py-2 text-xs font-medium transition",
+                    "mt-3 rounded-full px-3 py-2 text-xs font-medium transition hover:-translate-y-0.5 hover:shadow-sm",
                     activeCopyId === copy.id
                       ? "bg-slate-900 text-white"
                       : "bg-slate-100 text-slate-700 hover:bg-slate-200",
@@ -112,7 +112,7 @@ export function HistoryPanel({
                     <button
                       type="button"
                       onClick={() => onInspectModule(change.moduleId)}
-                      className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-200"
+                      className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:-translate-y-0.5 hover:bg-slate-200 hover:shadow-sm"
                     >
                       查看 diff
                     </button>

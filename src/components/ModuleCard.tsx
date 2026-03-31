@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { CodeXml, Columns2, MessageSquarePlus, PencilLine } from "lucide-react";
 import type { PromptModule, ViewMode } from "../types";
 import {
@@ -52,6 +53,7 @@ export function ModuleCard({
   onJumpToModule,
   onExcerptSelect,
 }: ModuleCardProps) {
+  const editorRef = useRef<HTMLTextAreaElement | null>(null);
   const currentContent = editedContent ?? module.readableContent;
   const tone = cardTones[module.order % cardTones.length];
   const showReadable = viewMode === "readable" || viewMode === "compare";
@@ -66,6 +68,16 @@ export function ModuleCard({
     moduleTargets,
     onJumpToModule,
   };
+
+  useEffect(() => {
+    const textarea = editorRef.current;
+    if (!textarea || !isEditable) {
+      return;
+    }
+
+    textarea.style.height = "0px";
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, [currentContent, isEditable]);
 
   return (
     <section
@@ -95,7 +107,7 @@ export function ModuleCard({
             <button
               type="button"
               onClick={() => onOpenPanel("comments", module.id)}
-              className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 transition hover:border-amber-300"
+              className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 transition hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-100 hover:shadow-sm"
             >
               <MessageSquarePlus className="h-4 w-4" />
               评论 {commentCount}
@@ -103,7 +115,7 @@ export function ModuleCard({
             <button
               type="button"
               onClick={() => onSwitchToCompare(module.id)}
-              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-slate-300"
+              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-sm"
             >
               <Columns2 className="h-4 w-4" />
               对照查看原文
@@ -113,7 +125,7 @@ export function ModuleCard({
                 type="button"
                 onClick={() => onOpenPanel("diff", module.id)}
                 className={cn(
-                  "inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm transition",
+                  "inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm transition hover:-translate-y-0.5 hover:shadow-sm",
                   isChanged
                     ? "border-sky-300 bg-sky-100 text-sky-950"
                     : "border-sky-200 bg-sky-50 text-sky-900 hover:border-sky-300",
@@ -154,12 +166,24 @@ export function ModuleCard({
               </div>
               {isEditable ? (
                 <textarea
+                  ref={editorRef}
                   value={currentContent}
-                  onChange={(event) =>
-                    onEditedContentChange(module.id, event.target.value)
-                  }
-                  onBlur={() => onEditedContentCommit(module.id)}
-                  className="min-h-[280px] w-full rounded-3xl border border-slate-200 bg-slate-50 p-4 text-sm leading-7 text-slate-800 outline-none transition focus:border-sky-400"
+                  onChange={(event) => {
+                    onEditedContentChange(module.id, event.target.value);
+                    requestAnimationFrame(() => {
+                      const textarea = editorRef.current;
+                      if (!textarea) {
+                        return;
+                      }
+                      textarea.style.height = "0px";
+                      textarea.style.height = `${textarea.scrollHeight}px`;
+                    });
+                  }}
+                  onBlur={() => {
+                    void onEditedContentCommit(module.id);
+                  }}
+                  rows={1}
+                  className="min-h-[280px] w-full resize-none overflow-hidden rounded-3xl border border-slate-200 bg-slate-50 p-4 text-sm leading-7 text-slate-800 outline-none transition focus:border-sky-400"
                 />
               ) : (
                 <div

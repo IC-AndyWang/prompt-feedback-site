@@ -29,7 +29,7 @@ export function DiffPanel({
   const removedBlocks = diffs.filter((part) => part.removed).length;
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex flex-col">
       <div className="border-b border-slate-200 px-5 py-4">
         <div className="flex items-center gap-2">
           <FileDiff className="h-4 w-4 text-slate-500" />
@@ -42,7 +42,7 @@ export function DiffPanel({
         </p>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-5 py-4">
+      <div className="px-5 py-4">
         {!hasDiff ? (
           <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-6 text-sm leading-6 text-slate-500">
             当前模块尚无改动，或你还没有进入个人副本模式。

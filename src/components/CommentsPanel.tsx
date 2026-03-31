@@ -62,7 +62,7 @@ export function CommentsPanel({
   const moduleNameMap = new Map(modules.map((module) => [module.id, module.title]));
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex flex-col">
       <div className="border-b border-slate-200 px-5 py-4">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -77,10 +77,10 @@ export function CommentsPanel({
             type="button"
             onClick={onToggleOnlyOpen}
             className={cn(
-              "rounded-full px-3 py-2 text-xs font-medium transition",
+              "rounded-full px-3 py-2 text-xs font-medium transition hover:-translate-y-0.5 hover:shadow-sm",
               onlyOpen
                 ? "bg-amber-100 text-amber-900"
-                : "bg-slate-100 text-slate-600",
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200",
             )}
           >
             仅看未解决评论
@@ -88,7 +88,7 @@ export function CommentsPanel({
         </div>
       </div>
 
-      <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+      <div className="space-y-4 px-5 py-4">
         <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
           <div className="mb-3 text-xs font-medium text-slate-500">
             以 {currentUser.name} 身份添加评论
@@ -107,7 +107,7 @@ export function CommentsPanel({
                 <button
                   type="button"
                   onClick={onClearExcerpt}
-                  className="rounded-full bg-white px-2.5 py-1 text-xs text-amber-800"
+                  className="rounded-full bg-white px-2.5 py-1 text-xs text-amber-800 transition hover:-translate-y-0.5 hover:shadow-sm"
                 >
                   清除
                 </button>
@@ -147,7 +147,7 @@ export function CommentsPanel({
               onClearExcerpt();
             }}
             disabled={composerDisabled}
-            className="mt-3 inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="mt-3 inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             <SendHorizonal className="h-4 w-4" />
             发布评论
@@ -215,7 +215,7 @@ export function CommentsPanel({
               <button
                 type="button"
                 onClick={() => onToggleStatus(comment.id)}
-                className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 transition hover:-translate-y-0.5 hover:border-slate-300 hover:text-slate-900 hover:shadow-sm"
               >
                 {comment.status === "open" ? (
                   <>

@@ -35,7 +35,7 @@ export function Sidebar({
             type="button"
             onClick={() => onSelectModule(module.id)}
             className={cn(
-              "mb-2 flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition",
+              "mb-2 flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition hover:-translate-y-0.5 hover:shadow-sm",
               activeModuleId === module.id
                 ? "border-sky-200 bg-sky-50"
                 : "border-transparent bg-slate-50 hover:border-slate-200 hover:bg-white",
