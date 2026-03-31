@@ -62,6 +62,7 @@ function App() {
   const [onlyOpenComments, setOnlyOpenComments] = useState(false);
   const [selectedExcerpt, setSelectedExcerpt] = useState<ExcerptSelection>();
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
+  const [rawPreviewModuleId, setRawPreviewModuleId] = useState<string>();
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [workbenchApiAvailable, setWorkbenchApiAvailable] = useState<boolean | null>(null);
   const [workbenchError, setWorkbenchError] = useState<string>();
@@ -96,6 +97,7 @@ function App() {
         );
         setDocument(parsed);
         setActiveModuleId(parsed.modules[0]?.id);
+        setRawPreviewModuleId(undefined);
       } catch (error) {
         setLoadError(
           error instanceof Error
@@ -135,6 +137,7 @@ function App() {
       setActiveCopyId(undefined);
       setDraftEdits({});
       setSelectedExcerpt(undefined);
+      setRawPreviewModuleId(undefined);
       setSidePanelTab("overview");
       setIsCollaborationReady(false);
       setWorkbenchApiAvailable(null);
@@ -180,6 +183,7 @@ function App() {
         setActiveCopyId(undefined);
         setDraftEdits({});
         setSelectedExcerpt(undefined);
+        setRawPreviewModuleId(undefined);
         setSidePanelTab("overview");
         setIsCollaborationReady(true);
       }
@@ -861,6 +865,7 @@ function App() {
           setActiveCopyId(undefined);
           setDraftEdits({});
           setSelectedExcerpt(undefined);
+          setRawPreviewModuleId(undefined);
           setLoginError(undefined);
         }}
         onCreateCopy={handleCreateCopy}
@@ -868,6 +873,7 @@ function App() {
           setActiveCopyId(undefined);
           setDraftEdits({});
           setSelectedExcerpt(undefined);
+          setRawPreviewModuleId(undefined);
           setSidePanelTab("overview");
         }}
         activeCopyName={activeCopy?.name}
@@ -1006,6 +1012,7 @@ function App() {
                 commentCount={commentCountByModule[module.id] ?? 0}
                 isEditable={Boolean(activeCopy && activeCopy.ownerId === currentUser.id)}
                 isChanged={changedModuleIds.includes(module.id)}
+                isRawExpanded={rawPreviewModuleId === module.id}
                 editedContent={
                   activeCopy
                     ? draftEdits[module.id] ?? activeCopy.moduleOverrides[module.id]
@@ -1014,9 +1021,11 @@ function App() {
                 onEditedContentChange={handleEditedContentChange}
                 onEditedContentCommit={handleEditedContentCommit}
                 onOpenPanel={handleOpenPanel}
-                onSwitchToCompare={(moduleId) => {
+                onToggleRawPreview={(moduleId) => {
                   setActiveModuleId(moduleId);
-                  setViewMode("compare");
+                  setRawPreviewModuleId((previous) =>
+                    previous === moduleId ? undefined : moduleId,
+                  );
                   setSidePanelTab("overview");
                 }}
                 onJumpToModule={handleSelectModule}
@@ -1026,11 +1035,18 @@ function App() {
           ))}
         </section>
 
-        <div className="relative min-w-[320px] self-start">
+        <div
+          className="relative hidden min-w-[320px] self-start xl:block"
+          style={{ width: rightPanelWidth }}
+        >
           <button
             type="button"
             onMouseDown={() => setIsResizingPanel(true)}
-            className="absolute -left-3 top-1/2 z-10 hidden h-24 w-6 -translate-y-1/2 cursor-col-resize items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-sm xl:flex"
+            className="fixed z-30 hidden h-24 w-6 -translate-y-1/2 cursor-col-resize items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-sm xl:flex"
+            style={{
+              top: "50vh",
+              right: `${rightPanelWidth + 12}px`,
+            }}
             aria-label="调整右侧栏宽度"
             title="拖拽调整右侧栏宽度"
           >
@@ -1041,7 +1057,10 @@ function App() {
             )}
           </button>
 
-          <aside className="sticky top-[148px] flex h-[calc(100vh-164px)] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+          <aside
+            className="fixed right-6 top-[148px] flex h-[calc(100vh-164px)] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"
+            style={{ width: rightPanelWidth }}
+          >
             <div className="sticky top-0 z-10 border-b border-slate-200 bg-white px-3 py-2">
               <div className="mb-2 px-1 text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
                 右侧工作台

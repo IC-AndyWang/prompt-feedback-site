@@ -22,11 +22,12 @@ interface ModuleCardProps {
   commentCount: number;
   isEditable: boolean;
   isChanged: boolean;
+  isRawExpanded: boolean;
   editedContent?: string;
   onEditedContentChange: (moduleId: string, value: string) => void;
   onEditedContentCommit: (moduleId: string) => void | Promise<void>;
   onOpenPanel: (panel: "comments" | "diff", moduleId: string) => void;
-  onSwitchToCompare: (moduleId: string) => void;
+  onToggleRawPreview: (moduleId: string) => void;
   onJumpToModule: (moduleId: string) => void;
   onExcerptSelect: (moduleId: string) => void;
 }
@@ -46,18 +47,19 @@ export function ModuleCard({
   commentCount,
   isEditable,
   isChanged,
+  isRawExpanded,
   editedContent,
   onEditedContentChange,
   onEditedContentCommit,
   onOpenPanel,
-  onSwitchToCompare,
+  onToggleRawPreview,
   onJumpToModule,
   onExcerptSelect,
 }: ModuleCardProps) {
   const currentContent = editedContent ?? module.readableContent;
   const tone = cardTones[module.order % cardTones.length];
   const showReadable = viewMode === "readable" || viewMode === "compare";
-  const showRaw = viewMode === "raw" || viewMode === "compare";
+  const showRaw = viewMode === "raw" || viewMode === "compare" || isRawExpanded;
   const moduleTargets: ModuleLinkTarget[] = allModules.flatMap((item) => [
     { label: item.tagName, targetId: item.id },
     { label: item.rawTitle, targetId: item.id },
@@ -105,11 +107,11 @@ export function ModuleCard({
             </button>
             <button
               type="button"
-              onClick={() => onSwitchToCompare(module.id)}
+              onClick={() => onToggleRawPreview(module.id)}
               className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-sm"
             >
               <Columns2 className="h-4 w-4" />
-              对照查看原文
+              {isRawExpanded ? "收起原文对照" : "对照查看原文"}
             </button>
             {isEditable ? (
               <button
@@ -147,7 +149,7 @@ export function ModuleCard({
         <div
           className={cn(
             "mt-6 grid gap-4",
-            viewMode === "compare" ? "lg:grid-cols-2" : "grid-cols-1",
+            showRaw && showReadable ? "lg:grid-cols-2" : "grid-cols-1",
           )}
         >
           {showReadable ? (
