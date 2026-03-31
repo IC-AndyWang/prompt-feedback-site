@@ -1,7 +1,6 @@
 import mammoth from "mammoth";
 import type { PromptDocument, PromptModule } from "../types";
 import { getModuleMetadata } from "./moduleMetadata";
-import { makeId } from "./helpers";
 
 function normalizeText(text: string) {
   return text
@@ -21,7 +20,20 @@ function cleanReadableContent(input: string) {
   );
 }
 
-function parseModules(rawText: string): PromptModule[] {
+function stableHash(input: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function makeStableId(prefix: string, seed: string) {
+  return `${prefix}_${stableHash(seed)}`;
+}
+
+function parseModules(rawText: string, documentStableId: string): PromptModule[] {
   const modulePattern = /<([a-zA-Z0-9_:-]+)>\s*([\s\S]*?)\s*<\/\1>/g;
   const matches = Array.from(rawText.matchAll(modulePattern));
 
@@ -32,7 +44,10 @@ function parseModules(rawText: string): PromptModule[] {
     const metadata = getModuleMetadata(tagName);
 
     return {
-      id: makeId(`module_${tagName}`),
+      id: makeStableId(
+        `module_${tagName}`,
+        `${documentStableId}:${tagName}:${index}:${moduleRaw}`,
+      ),
       order: index,
       tagName,
       title: metadata.title,
@@ -49,7 +64,7 @@ function parseModules(rawText: string): PromptModule[] {
 
   return [
     {
-      id: makeId("module_fallback"),
+      id: makeStableId("module_fallback", `${documentStableId}:full_document:${rawText}`),
       order: 0,
       tagName: "full_document",
       title: "完整 Prompt 内容",
@@ -74,11 +89,15 @@ export async function parseDocxToPromptDocument(
   sourcePath?: string,
 ) {
   const rawText = await extractTextFromDocx(source);
-  const modules = parseModules(rawText);
+  const documentStableId = makeStableId(
+    "prompt_document",
+    `${sourceName}:${sourcePath ?? ""}:${rawText}`,
+  );
+  const modules = parseModules(rawText, documentStableId);
   const now = new Date().toISOString();
 
   const document: PromptDocument = {
-    id: makeId("prompt_document"),
+    id: documentStableId,
     title: "Prompt 结构说明",
     subtitle: "帮助业务用户更清晰地查看 Prompt 的结构、内容与优化建议",
     sourceName,
